@@ -464,6 +464,11 @@ function renderChart(){
   document.getElementById('chart-container').innerHTML = svg;
 }
 
+function nombrePerfil(id){
+  const p = perfiles.find(x=>x.id===id);
+  return p ? (p.nombre || 'sin nombre') : 'desconocido';
+}
+
 function renderPipeline(){
   const body = document.getElementById('contacts-body');
   const empty = document.getElementById('contacts-empty');
@@ -472,7 +477,8 @@ function renderPipeline(){
   empty.style.display='none';
   prospectos.forEach(c=>{
     const tr = document.createElement('tr');
-    tr.innerHTML = '<td>'+c.fecha+'</td><td>'+c.nombre+'</td><td>'+(c.telefono||'—')+'</td><td>'+c.canal+'</td>'+
+    const canalTxt = c.canal==='embajador' ? nombrePerfil(c.created_by) : c.canal;
+    tr.innerHTML = '<td>'+c.fecha+'</td><td>'+c.nombre+'</td><td>'+(c.telefono||'—')+'</td><td>'+canalTxt+'</td>'+
       '<td><select onchange="updateEstado(\''+c.id+'\', this.value)" style="width:auto;padding:3px 6px;font-size:12px;">'+
       ['contactado','seguimiento','cerrado','perdido'].map(s=>'<option value="'+s+'"'+(s===c.estado?' selected':'')+'>'+s+'</option>').join('')+
       '</select></td>'+
@@ -501,21 +507,41 @@ function renderCobros(){
 function renderEmbajadores(){
   const container = document.getElementById('embajadores-body');
   const porEmbajador = {};
+  perfiles.filter(p=>p.rol==='embajador').forEach(p=>{
+    porEmbajador[p.id] = { nombre: p.nombre||'sin nombre', total:0, cerrados:0, monto:0 };
+  });
   prospectos.filter(c=>c.canal==='embajador').forEach(c=>{
     const key = c.created_by;
-    if(!porEmbajador[key]) porEmbajador[key] = { total:0, cerrados:0, monto:0 };
+    if(!porEmbajador[key]) porEmbajador[key] = { nombre: nombrePerfil(key), total:0, cerrados:0, monto:0 };
     porEmbajador[key].total++;
     if(c.estado==='cerrado'){ porEmbajador[key].cerrados++; porEmbajador[key].monto += Number(c.monto||0); }
   });
-  const totalProspectos = Object.values(porEmbajador).reduce((s,v)=>s+v.total,0);
-  const totalCerrados = Object.values(porEmbajador).reduce((s,v)=>s+v.cerrados,0);
-  const totalMonto = Object.values(porEmbajador).reduce((s,v)=>s+v.monto,0);
-  container.innerHTML =
-    '<div class="grid3">'+
+  const entries = Object.values(porEmbajador);
+  const totalProspectos = entries.reduce((s,v)=>s+v.total,0);
+  const totalCerrados = entries.reduce((s,v)=>s+v.cerrados,0);
+  const totalMonto = entries.reduce((s,v)=>s+v.monto,0);
+
+  let html = '<div class="grid3">'+
     '<div><p class="stat-label">Prospectos vía embajador</p><p class="stat-val">'+totalProspectos+'</p></div>'+
     '<div><p class="stat-label">Cerrados</p><p class="stat-val">'+totalCerrados+'</p></div>'+
     '<div><p class="stat-label">Monto generado reportado</p><p class="stat-val">'+fmt(totalMonto)+'</p></div>'+
     '</div>';
+
+  if(entries.length > 0){
+    const maxMonto = Math.max(...entries.map(e=>e.monto), 1);
+    const w = 680, barH = 26, gap = 14, padL = 130, padR = 70, h = entries.length*(barH+gap)+10;
+    let bars = '';
+    entries.forEach((e,i)=>{
+      const y = i*(barH+gap)+8;
+      const barW = (e.monto/maxMonto)*(w-padL-padR);
+      bars += '<text x="'+(padL-8)+'" y="'+(y+barH*0.65)+'" font-size="12" fill="var(--ink)" text-anchor="end">'+e.nombre+'</text>';
+      bars += '<rect x="'+padL+'" y="'+y+'" width="'+Math.max(barW,2)+'" height="'+barH+'" fill="var(--moss)" rx="2"/>';
+      bars += '<text x="'+(padL+barW+8)+'" y="'+(y+barH*0.65)+'" font-size="12" fill="var(--ink-soft)">'+fmt(e.monto)+' ('+e.cerrados+' cerrados)</text>';
+    });
+    html += '<div style="margin-top:16px;"><svg viewBox="0 0 '+w+' '+h+'" style="width:100%;height:auto;">'+bars+'</svg></div>';
+  }
+
+  container.innerHTML = html;
 }
 
 function renderPerfiles(){
