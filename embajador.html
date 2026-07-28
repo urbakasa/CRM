@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Urbakasa — Mi pipeline</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=Public+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{--paper:#F3EEE2;--ink:#1E3A34;--ink-soft:#3E5850;--line:#C9C2AE;--paper-card:#FAF7EF;--moss:#3F6B44;--moss-soft:#DCE8D8;--brass:#8A5A22;--brass-soft:#E9DAC1;--rust:#9C3E28;--rust-soft:#F2DCD3;}
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--paper);color:var(--ink);font-family:'Public Sans',sans-serif;}
+  .wrap{max-width:680px;margin:0 auto;padding:28px 20px 60px;}
+  .top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;}
+  .eyebrow{font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-soft);margin:0 0 6px;}
+  h1{font-family:'Fraunces',serif;font-weight:600;font-size:26px;margin:0 0 2px;}
+  .who{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--ink-soft);margin:0;}
+  button.logout{background:none;border:1px solid var(--line);padding:7px 14px;border-radius:3px;font-size:12px;cursor:pointer;color:var(--ink-soft);}
+  .card{background:var(--paper-card);border:1px solid var(--line);border-radius:3px;padding:16px 18px;margin-bottom:14px;}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+  h3{font-family:'Fraunces',serif;font-weight:600;font-size:16px;margin:0 0 12px;}
+  label{display:block;font-size:12px;color:var(--ink-soft);margin:10px 0 4px;}
+  input,select,textarea{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:3px;background:#fff;font-size:14px;color:var(--ink);font-family:'Public Sans',sans-serif;}
+  textarea{resize:vertical;min-height:50px;}
+  button.action{margin-top:14px;background:var(--ink);color:var(--paper-card);border:none;padding:9px 16px;border-radius:3px;font-size:13px;cursor:pointer;}
+  table{width:100%;border-collapse:collapse;font-size:12.5px;}
+  th{text-align:left;font-family:'IBM Plex Mono',monospace;font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-soft);border-bottom:1px solid var(--line);padding:6px 4px;}
+  td{padding:7px 4px;border-bottom:1px solid var(--line);vertical-align:top;}
+  .empty{color:var(--ink-soft);font-size:13px;font-style:italic;padding:10px 0;}
+  .stat-val{font-family:'IBM Plex Mono',monospace;font-size:22px;font-weight:500;margin:0;}
+  .stat-label{font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-soft);margin:0 0 6px;}
+  .comentario-txt{font-size:11.5px;color:var(--ink-soft);max-width:130px;display:block;}
+  .aviso-item{border-bottom:1px solid var(--line);padding:10px 0;}
+  .aviso-item:last-child{border-bottom:none;}
+  .aviso-fecha{font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--ink-soft);}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <div>
+      <p class="eyebrow">Urbakasa</p>
+      <h1>Mi pipeline</h1>
+      <p class="who" id="who-am-i"></p>
+    </div>
+    <button class="logout" onclick="logout()">Cerrar sesión</button>
+  </div>
+
+  <div class="grid2">
+    <div class="card">
+      <p class="stat-label">Prospectos registrados</p>
+      <p class="stat-val" id="stat-total">0</p>
+    </div>
+    <div class="card">
+      <p class="stat-label">Ingreso generado (cerrados)</p>
+      <p class="stat-val" id="stat-ingreso">$0</p>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Avisos de tu administrador</h3>
+    <div id="avisos-body"></div>
+    <p class="empty" id="avisos-empty" style="display:none;">No hay avisos por ahora.</p>
+  </div>
+
+  <div class="card">
+    <h3>Nuevo prospecto</h3>
+    <label>Nombre</label>
+    <input id="c-nombre" placeholder="Empresa o propietario">
+    <label>Teléfono</label>
+    <input id="c-telefono" placeholder="33 1234 5678">
+    <label>Tipo</label>
+    <select id="c-tipo"><option>Empresa</option><option>Propietario macrolote</option></select>
+    <label>Estado</label>
+    <select id="c-estado">
+      <option value="contactado">Contactado</option>
+      <option value="seguimiento">Seguimiento</option>
+      <option value="cerrado">Cerrado</option>
+      <option value="perdido">Perdido</option>
+    </select>
+    <label>Fecha tentativa de cierre</label>
+    <input id="c-fecha-cierre" type="date">
+    <label>Monto generado (si cerró)</label>
+    <input id="c-monto" type="number" placeholder="opcional">
+    <label>Comentarios</label>
+    <textarea id="c-comentarios" placeholder="notas sobre este contacto"></textarea>
+    <button class="action" onclick="addContact()">Agregar</button>
+  </div>
+
+  <div class="card">
+    <h3>Mis prospectos</h3>
+    <table>
+      <thead><tr><th>Fecha</th><th>Nombre</th><th>Tel.</th><th>Estado</th><th>Cierre tent.</th><th>Monto</th><th>Comentarios</th></tr></thead>
+      <tbody id="contacts-body"></tbody>
+    </table>
+    <p class="empty" id="contacts-empty" style="display:none;">Aún no has registrado prospectos.</p>
+  </div>
+</div>
+
+<script src="config.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script>
+const client = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+let userId = null;
+
+async function init(){
+  const { data } = await client.auth.getSession();
+  if(!data.session){ window.location.href = 'login.html'; return; }
+  const { data: perfil } = await client.from('perfiles').select('rol,nombre').eq('id', data.session.user.id).single();
+  if(!perfil || perfil.rol !== 'embajador'){ window.location.href = 'login.html'; return; }
+  userId = data.session.user.id;
+  document.getElementById('who-am-i').textContent = perfil.nombre || data.session.user.email;
+  await Promise.all([loadContacts(), loadAvisos()]);
+}
+
+async function logout(){
+  await client.auth.signOut();
+  window.location.href = 'login.html';
+}
+
+function todayISO(){ return new Date().toISOString().slice(0,10); }
+function fmt(n){ return '$'+Math.round(n).toLocaleString('es-MX'); }
+
+async function addContact(){
+  const nombre = document.getElementById('c-nombre').value.trim();
+  if(!nombre) return;
+  const montoVal = document.getElementById('c-monto').value;
+  const { error } = await client.from('prospectos').insert({
+    created_by: userId,
+    nombre,
+    telefono: document.getElementById('c-telefono').value.trim(),
+    tipo: document.getElementById('c-tipo').value,
+    canal: 'embajador',
+    estado: document.getElementById('c-estado').value,
+    fecha: todayISO(),
+    fecha_cierre_tentativa: document.getElementById('c-fecha-cierre').value || null,
+    monto: montoVal ? parseFloat(montoVal) : null,
+    comentarios: document.getElementById('c-comentarios').value.trim()
+  });
+  if(error){ alert('No se pudo guardar: ' + error.message); return; }
+  ['c-nombre','c-telefono','c-monto','c-comentarios'].forEach(id=>document.getElementById(id).value='');
+  loadContacts();
+}
+
+async function loadContacts(){
+  const { data, error } = await client
+    .from('prospectos')
+    .select('*')
+    .eq('created_by', userId)
+    .order('fecha', { ascending: false });
+  if(error) return;
+  document.getElementById('stat-total').textContent = data.length;
+  const ingreso = data.filter(c=>c.estado==='cerrado').reduce((s,c)=>s+Number(c.monto||0),0);
+  document.getElementById('stat-ingreso').textContent = fmt(ingreso);
+  const body = document.getElementById('contacts-body');
+  const empty = document.getElementById('contacts-empty');
+  body.innerHTML = '';
+  if(data.length === 0){ empty.style.display = 'block'; return; }
+  empty.style.display = 'none';
+  data.forEach(c=>{
+    const tr = document.createElement('tr');
+    tr.innerHTML = '<td>'+c.fecha+'</td><td>'+c.nombre+'</td><td>'+(c.telefono||'—')+'</td>'+
+      '<td><select onchange="updateEstado(\''+c.id+'\', this.value)" style="width:auto;padding:3px 6px;font-size:12px;">'+
+      ['contactado','seguimiento','cerrado','perdido'].map(s=>'<option value="'+s+'"'+(s===c.estado?' selected':'')+'>'+s+'</option>').join('')+
+      '</select></td>'+
+      '<td>'+(c.fecha_cierre_tentativa||'—')+'</td>'+
+      '<td>'+(c.monto?fmt(c.monto):'—')+'</td>'+
+      '<td><span class="comentario-txt">'+(c.comentarios||'—')+'</span></td>';
+    body.appendChild(tr);
+  });
+}
+
+async function updateEstado(id, estado){
+  await client.from('prospectos').update({ estado }).eq('id', id).eq('created_by', userId);
+  loadContacts();
+}
+
+async function loadAvisos(){
+  const { data, error } = await client.from('avisos').select('*').order('created_at', { ascending: false });
+  const body = document.getElementById('avisos-body');
+  const empty = document.getElementById('avisos-empty');
+  body.innerHTML = '';
+  if(error || !data || data.length === 0){ empty.style.display = 'block'; return; }
+  empty.style.display = 'none';
+  data.forEach(a=>{
+    const div = document.createElement('div');
+    div.className = 'aviso-item';
+    div.innerHTML = '<p class="aviso-fecha">'+new Date(a.created_at).toLocaleString('es-MX')+'</p><p style="margin:4px 0;">'+a.mensaje+'</p>';
+    body.appendChild(div);
+  });
+}
+
+init();
+</script>
+</body>
+</html>

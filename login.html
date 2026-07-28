@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Urbakasa — Acceso</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=Public+Sans:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box;}
+  body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#F3EEE2;color:#1E3A34;font-family:'Public Sans',sans-serif;}
+  .box{width:100%;max-width:340px;padding:32px;background:#FAF7EF;border:1px solid #C9C2AE;border-radius:4px;}
+  h1{font-family:'Fraunces',serif;font-weight:600;font-size:24px;margin:0 0 4px;}
+  p.sub{color:#3E5850;font-size:13px;margin:0 0 20px;}
+  label{display:block;font-size:12px;color:#3E5850;margin:12px 0 4px;}
+  input{width:100%;padding:9px 10px;border:1px solid #C9C2AE;border-radius:3px;font-size:14px;}
+  button{width:100%;margin-top:18px;background:#1E3A34;color:#FAF7EF;border:none;padding:10px;border-radius:3px;font-size:14px;cursor:pointer;}
+  button:disabled{opacity:0.6;}
+  .error{color:#9C3E28;font-size:13px;margin-top:10px;display:none;}
+</style>
+</head>
+<body>
+<div class="box">
+  <h1>Urbakasa</h1>
+  <p class="sub">Inteligencia territorial — acceso al panel</p>
+  <label>Correo</label>
+  <input id="email" type="email" placeholder="tu@correo.com">
+  <label>Contraseña</label>
+  <input id="password" type="password" placeholder="••••••••">
+  <button id="btn" onclick="login()">Entrar</button>
+  <p class="error" id="error"></p>
+</div>
+
+<script src="config.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script>
+const client = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+async function login(){
+  const email = document.getElementById('email').value.trim();
+  const password = document.getElementById('password').value;
+  const errorEl = document.getElementById('error');
+  const btn = document.getElementById('btn');
+  errorEl.style.display = 'none';
+  btn.disabled = true;
+  btn.textContent = 'Entrando…';
+
+  const { data, error } = await client.auth.signInWithPassword({ email, password });
+  if(error){
+    errorEl.textContent = 'Correo o contraseña incorrectos.';
+    errorEl.style.display = 'block';
+    btn.disabled = false;
+    btn.textContent = 'Entrar';
+    return;
+  }
+
+  const { data: perfil, error: perfilError } = await client
+    .from('perfiles')
+    .select('rol')
+    .eq('id', data.user.id)
+    .single();
+
+  if(perfilError || !perfil){
+    errorEl.textContent = 'No se encontró tu perfil. Detalle técnico: ' + (perfilError ? perfilError.message + ' (código: ' + perfilError.code + ')' : 'sin filas devueltas');
+    errorEl.style.display = 'block';
+    btn.disabled = false;
+    btn.textContent = 'Entrar';
+    return;
+  }
+
+  window.location.href = perfil.rol === 'admin' ? 'admin.html' : 'embajador.html';
+}
+
+document.getElementById('password').addEventListener('keydown', e=>{
+  if(e.key === 'Enter') login();
+});
+
+(async () => {
+  const { data } = await client.auth.getSession();
+  if(data.session){
+    const { data: perfil } = await client.from('perfiles').select('rol').eq('id', data.session.user.id).single();
+    if(perfil){ window.location.href = perfil.rol === 'admin' ? 'admin.html' : 'embajador.html'; }
+  }
+})();
+</script>
+</body>
+</html>
