@@ -47,6 +47,9 @@
   .week-row.current{background:var(--brass-soft);}
   .comentario-txt{font-size:11.5px;color:var(--ink-soft);white-space:normal;word-break:break-word;display:block;}
   .table-scroll{overflow-x:auto;}
+  .sort-controls{display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap;}
+  .sort-controls select{width:auto;font-size:12px;padding:5px 8px;}
+  .sort-dir-btn{background:none;border:1px solid var(--line);border-radius:3px;padding:5px 10px;font-size:12px;cursor:pointer;color:var(--ink-soft);}
   .pipeline-table{table-layout:fixed;}
   .pipeline-table td{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
   .pipeline-table td.coment-cell{white-space:normal;overflow:visible;text-overflow:clip;}
@@ -151,6 +154,15 @@
     </div>
     <div class="card">
       <h3>Pipeline completo</h3>
+      <div class="sort-controls">
+        <label style="margin:0;">Ordenar por</label>
+        <select id="sort-field-pipeline" onchange="renderPipeline()">
+          <option value="fecha">Fecha de registro</option>
+          <option value="nombre">Nombre</option>
+          <option value="fecha_cierre_tentativa">Fecha de cierre tentativa</option>
+        </select>
+        <button class="sort-dir-btn" onclick="toggleSortDir('pipeline')" id="sort-dir-pipeline">↓ desc</button>
+      </div>
       <div class="table-scroll">
       <table class="pipeline-table">
         <colgroup>
@@ -195,6 +207,15 @@
   <div class="panel" id="panel-embajadores">
     <div class="card">
       <h3>Desempeño de embajadores</h3>
+      <div class="sort-controls">
+        <label style="margin:0;">Ordenar por</label>
+        <select id="sort-field-emb" onchange="renderEmbajadores()">
+          <option value="nombre">Nombre</option>
+          <option value="monto">Monto generado</option>
+          <option value="cerrados">Cerrados</option>
+        </select>
+        <button class="sort-dir-btn" onclick="toggleSortDir('emb')" id="sort-dir-emb">↓ desc</button>
+      </div>
       <div id="embajadores-body"></div>
     </div>
     <div class="card">
@@ -498,13 +519,36 @@ async function saveComentario(id){
   renderAll();
 }
 
+const sortDirs = { pipeline: 'desc', emb: 'desc' };
+
+function toggleSortDir(which){
+  sortDirs[which] = sortDirs[which]==='desc' ? 'asc' : 'desc';
+  document.getElementById('sort-dir-'+which).textContent = (sortDirs[which]==='desc' ? '↓ desc' : '↑ asc');
+  if(which==='pipeline') renderPipeline(); else renderEmbajadores();
+}
+
+function sortBy(list, field, dir){
+  return [...list].sort((a,b)=>{
+    let av = a[field], bv = b[field];
+    if(av===null||av===undefined) av='';
+    if(bv===null||bv===undefined) bv='';
+    if(typeof av === 'string') av = av.toLowerCase();
+    if(typeof bv === 'string') bv = bv.toLowerCase();
+    if(av<bv) return dir==='asc' ? -1 : 1;
+    if(av>bv) return dir==='asc' ? 1 : -1;
+    return 0;
+  });
+}
+
 function renderPipeline(){
   const body = document.getElementById('contacts-body');
   const empty = document.getElementById('contacts-empty');
   body.innerHTML = '';
   if(prospectos.length===0){ empty.style.display='block'; return; }
   empty.style.display='none';
-  prospectos.forEach(c=>{
+  const field = document.getElementById('sort-field-pipeline').value;
+  const sorted = sortBy(prospectos, field, sortDirs.pipeline);
+  sorted.forEach(c=>{
     const tr = document.createElement('tr');
     const canalTxt = c.canal==='embajador' ? nombrePerfil(c.created_by) : c.canal;
     tr.innerHTML = '<td>'+c.fecha+'</td><td>'+c.nombre+'</td><td>'+(c.telefono||'—')+'</td><td>'+canalTxt+'</td>'+
@@ -545,7 +589,9 @@ function renderEmbajadores(){
     porEmbajador[key].total++;
     if(c.estado==='cerrado'){ porEmbajador[key].cerrados++; porEmbajador[key].monto += Number(c.monto||0); }
   });
-  const entries = Object.values(porEmbajador);
+  const entries0 = Object.values(porEmbajador);
+  const field = document.getElementById('sort-field-emb').value;
+  const entries = sortBy(entries0, field, sortDirs.emb);
   const totalProspectos = entries.reduce((s,v)=>s+v.total,0);
   const totalCerrados = entries.reduce((s,v)=>s+v.cerrados,0);
   const totalMonto = entries.reduce((s,v)=>s+v.monto,0);

@@ -30,6 +30,9 @@
   .stat-label{font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-soft);margin:0 0 6px;}
   .comentario-txt{font-size:11.5px;color:var(--ink-soft);white-space:normal;word-break:break-word;display:block;}
   .table-scroll{overflow-x:auto;}
+  .sort-controls{display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap;}
+  .sort-controls select{width:auto;font-size:12px;padding:5px 8px;}
+  .sort-dir-btn{background:none;border:1px solid var(--line);border-radius:3px;padding:5px 10px;font-size:12px;cursor:pointer;color:var(--ink-soft);}
   .pipeline-table{table-layout:fixed;}
   .pipeline-table td{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
   .pipeline-table td.coment-cell{white-space:normal;overflow:visible;text-overflow:clip;}
@@ -95,6 +98,15 @@
 
   <div class="card">
     <h3>Mis prospectos</h3>
+    <div class="sort-controls">
+      <label style="margin:0;">Ordenar por</label>
+      <select id="sort-field-pipeline" onchange="renderContactsTable()">
+        <option value="fecha">Fecha de registro</option>
+        <option value="nombre">Nombre</option>
+        <option value="fecha_cierre_tentativa">Fecha de cierre tentativa</option>
+      </select>
+      <button class="sort-dir-btn" onclick="toggleSortDir()" id="sort-dir-pipeline">↓ desc</button>
+    </div>
     <div class="table-scroll">
     <table class="pipeline-table">
       <colgroup>
@@ -165,12 +177,39 @@ async function loadContacts(){
   document.getElementById('stat-total').textContent = data.length;
   const ingreso = data.filter(c=>c.estado==='cerrado').reduce((s,c)=>s+Number(c.monto||0),0);
   document.getElementById('stat-ingreso').textContent = fmt(ingreso);
+  renderContactsTable();
+}
+
+let sortDirPipeline = 'desc';
+
+function toggleSortDir(){
+  sortDirPipeline = sortDirPipeline==='desc' ? 'asc' : 'desc';
+  document.getElementById('sort-dir-pipeline').textContent = (sortDirPipeline==='desc' ? '↓ desc' : '↑ asc');
+  renderContactsTable();
+}
+
+function sortBy(list, field, dir){
+  return [...list].sort((a,b)=>{
+    let av = a[field], bv = b[field];
+    if(av===null||av===undefined) av='';
+    if(bv===null||bv===undefined) bv='';
+    if(typeof av === 'string') av = av.toLowerCase();
+    if(typeof bv === 'string') bv = bv.toLowerCase();
+    if(av<bv) return dir==='asc' ? -1 : 1;
+    if(av>bv) return dir==='asc' ? 1 : -1;
+    return 0;
+  });
+}
+
+function renderContactsTable(){
   const body = document.getElementById('contacts-body');
   const empty = document.getElementById('contacts-empty');
   body.innerHTML = '';
-  if(data.length === 0){ empty.style.display = 'block'; return; }
+  if(misContactos.length === 0){ empty.style.display = 'block'; return; }
   empty.style.display = 'none';
-  data.forEach(c=>{
+  const field = document.getElementById('sort-field-pipeline').value;
+  const sorted = sortBy(misContactos, field, sortDirPipeline);
+  sorted.forEach(c=>{
     const tr = document.createElement('tr');
     tr.innerHTML = '<td>'+c.fecha+'</td><td>'+c.nombre+'</td><td>'+(c.telefono||'—')+'</td>'+
       '<td><select onchange="updateEstado(\''+c.id+'\', this.value)" style="width:auto;padding:3px 6px;font-size:12px;">'+
