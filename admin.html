@@ -326,6 +326,7 @@ async function updateEstado(id, estado){
 }
 
 async function deleteContact(id){
+  if(!confirm('¿Seguro que quieres eliminar este prospecto? Esta acción no se puede deshacer.')) return;
   await client.from('prospectos').delete().eq('id', id);
   await loadAll();
   renderAll();
@@ -350,6 +351,7 @@ async function addCobro(){
 }
 
 async function deleteCobro(id){
+  if(!confirm('¿Seguro que quieres eliminar este cobro? Esta acción no se puede deshacer.')) return;
   await client.from('cobros').delete().eq('id', id);
   await loadAll();
   renderAll();
@@ -366,6 +368,7 @@ async function addAviso(){
 }
 
 async function deleteAviso(id){
+  if(!confirm('¿Seguro que quieres eliminar este aviso?')) return;
   await client.from('avisos').delete().eq('id', id);
   await loadAll();
   renderAll();
