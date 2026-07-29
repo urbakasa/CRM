@@ -45,7 +45,14 @@
   .month-row:last-child{border-bottom:none;}
   .month-name{font-family:'IBM Plex Mono',monospace;color:var(--ink-soft);}
   .week-row.current{background:var(--brass-soft);}
-  .comentario-txt{font-size:11.5px;color:var(--ink-soft);max-width:140px;display:block;}
+  .comentario-txt{font-size:11.5px;color:var(--ink-soft);white-space:normal;word-break:break-word;display:block;}
+  .table-scroll{overflow-x:auto;}
+  .pipeline-table{table-layout:fixed;}
+  .pipeline-table td{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .pipeline-table td.coment-cell{white-space:normal;overflow:visible;text-overflow:clip;}
+  .edit-link{background:none;border:none;color:var(--ink-soft);font-size:10.5px;text-decoration:underline;cursor:pointer;padding:2px 0 0;display:block;}
+  .coment-edit-box textarea{width:100%;min-height:55px;font-size:12px;}
+  .coment-edit-box button{margin-top:4px;font-size:11px;padding:3px 9px;background:var(--ink);color:#fff;border:none;border-radius:3px;cursor:pointer;}
   .aviso-item{border-bottom:1px solid var(--line);padding:10px 0;}
   .aviso-item:last-child{border-bottom:none;}
   .aviso-fecha{font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--ink-soft);}
@@ -144,10 +151,15 @@
     </div>
     <div class="card">
       <h3>Pipeline completo</h3>
-      <table>
+      <div class="table-scroll">
+      <table class="pipeline-table">
+        <colgroup>
+          <col style="width:95px"><col style="width:150px"><col style="width:105px"><col style="width:120px"><col style="width:115px"><col style="width:105px"><col style="width:90px"><col style="width:240px"><col style="width:65px">
+        </colgroup>
         <thead><tr><th>Fecha</th><th>Nombre</th><th>Tel.</th><th>Canal</th><th>Estado</th><th>Cierre tent.</th><th>Monto</th><th>Comentarios</th><th></th></tr></thead>
         <tbody id="contacts-body"></tbody>
       </table>
+      </div>
       <p class="empty" id="contacts-empty" style="display:none;">Aún no hay prospectos registrados.</p>
     </div>
   </div>
@@ -469,6 +481,20 @@ function nombrePerfil(id){
   return p ? (p.nombre || 'sin nombre') : 'desconocido';
 }
 
+function startEditComentario(id){
+  const c = prospectos.find(x=>x.id===id);
+  const cell = document.getElementById('coment-cell-'+id);
+  cell.innerHTML = '<div class="coment-edit-box"><textarea id="coment-edit-'+id+'">'+(c.comentarios||'')+'</textarea>'+
+    '<button onclick="saveComentario(\''+id+'\')">Guardar</button></div>';
+}
+
+async function saveComentario(id){
+  const val = document.getElementById('coment-edit-'+id).value;
+  await client.from('prospectos').update({ comentarios: val }).eq('id', id);
+  await loadAll();
+  renderAll();
+}
+
 function renderPipeline(){
   const body = document.getElementById('contacts-body');
   const empty = document.getElementById('contacts-empty');
@@ -484,7 +510,7 @@ function renderPipeline(){
       '</select></td>'+
       '<td>'+(c.fecha_cierre_tentativa||'—')+'</td>'+
       '<td>'+(c.monto?fmt(c.monto):'—')+'</td>'+
-      '<td><span class="comentario-txt">'+(c.comentarios||'—')+'</span></td>'+
+      '<td class="coment-cell" id="coment-cell-'+c.id+'"><span class="comentario-txt">'+(c.comentarios||'—')+'</span><button class="edit-link" onclick="startEditComentario(\''+c.id+'\')">editar</button></td>'+
       '<td><button class="del" onclick="deleteContact(\''+c.id+'\')">eliminar</button></td>';
     body.appendChild(tr);
   });
