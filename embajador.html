@@ -33,6 +33,7 @@
   .sort-controls{display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap;}
   .sort-controls select{width:auto;font-size:12px;padding:5px 8px;}
   .sort-dir-btn{background:none;border:1px solid var(--line);border-radius:3px;padding:5px 10px;font-size:12px;cursor:pointer;color:var(--ink-soft);}
+  .hist-badge{font-size:10px;color:var(--rust);cursor:pointer;text-decoration:underline;white-space:nowrap;}
   .pipeline-table{table-layout:fixed;}
   .pipeline-table td{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
   .pipeline-table td.coment-cell{white-space:normal;overflow:visible;text-overflow:clip;}
@@ -79,7 +80,7 @@
     <label>Teléfono</label>
     <input id="c-telefono" placeholder="33 1234 5678">
     <label>Tipo</label>
-    <select id="c-tipo"><option>Empresa</option><option>Propietario macrolote</option></select>
+    <select id="c-tipo"><option>Propietario</option><option>Agente inmobiliario</option><option>Empresa</option></select>
     <label>Estado</label>
     <select id="c-estado">
       <option value="contactado">Contactado</option>
@@ -104,15 +105,26 @@
         <option value="fecha">Fecha de registro</option>
         <option value="nombre">Nombre</option>
         <option value="fecha_cierre_tentativa">Fecha de cierre tentativa</option>
+        <option value="tipo">Tipo (propietario/agente)</option>
+        <option value="estado">Estado</option>
       </select>
       <button class="sort-dir-btn" onclick="toggleSortDir()" id="sort-dir-pipeline">↓ desc</button>
+      <label style="margin:0;">luego por</label>
+      <select id="sort-field-pipeline-2" onchange="renderContactsTable()">
+        <option value="">(sin segundo criterio)</option>
+        <option value="fecha">Fecha de registro</option>
+        <option value="nombre">Nombre</option>
+        <option value="fecha_cierre_tentativa">Fecha de cierre tentativa</option>
+        <option value="tipo">Tipo (propietario/agente)</option>
+        <option value="estado">Estado</option>
+      </select>
     </div>
     <div class="table-scroll">
     <table class="pipeline-table">
       <colgroup>
-        <col style="width:90px"><col style="width:140px"><col style="width:105px"><col style="width:115px"><col style="width:100px"><col style="width:90px"><col style="width:230px">
+        <col style="width:90px"><col style="width:140px"><col style="width:105px"><col style="width:130px"><col style="width:115px"><col style="width:140px"><col style="width:90px"><col style="width:230px">
       </colgroup>
-      <thead><tr><th>Fecha</th><th>Nombre</th><th>Tel.</th><th>Estado</th><th>Cierre tent.</th><th>Monto</th><th>Comentarios</th></tr></thead>
+      <thead><tr><th>Fecha</th><th>Nombre</th><th>Tel.</th><th>Tipo</th><th>Estado</th><th>Cierre tent.</th><th>Monto</th><th>Comentarios</th></tr></thead>
       <tbody id="contacts-body"></tbody>
     </table>
     </div>
@@ -188,7 +200,7 @@ function toggleSortDir(){
   renderContactsTable();
 }
 
-function sortBy(list, field, dir){
+function sortBy(list, field, dir, field2){
   return [...list].sort((a,b)=>{
     let av = a[field], bv = b[field];
     if(av===null||av===undefined) av='';
@@ -197,6 +209,15 @@ function sortBy(list, field, dir){
     if(typeof bv === 'string') bv = bv.toLowerCase();
     if(av<bv) return dir==='asc' ? -1 : 1;
     if(av>bv) return dir==='asc' ? 1 : -1;
+    if(field2){
+      let av2 = a[field2], bv2 = b[field2];
+      if(av2===null||av2===undefined) av2='';
+      if(bv2===null||bv2===undefined) bv2='';
+      if(typeof av2 === 'string') av2 = av2.toLowerCase();
+      if(typeof bv2 === 'string') bv2 = bv2.toLowerCase();
+      if(av2<bv2) return dir==='asc' ? -1 : 1;
+      if(av2>bv2) return dir==='asc' ? 1 : -1;
+    }
     return 0;
   });
 }
@@ -208,18 +229,46 @@ function renderContactsTable(){
   if(misContactos.length === 0){ empty.style.display = 'block'; return; }
   empty.style.display = 'none';
   const field = document.getElementById('sort-field-pipeline').value;
-  const sorted = sortBy(misContactos, field, sortDirPipeline);
+  const field2 = document.getElementById('sort-field-pipeline-2').value;
+  const sorted = sortBy(misContactos, field, sortDirPipeline, field2);
   sorted.forEach(c=>{
     const tr = document.createElement('tr');
-    tr.innerHTML = '<td>'+c.fecha+'</td><td>'+c.nombre+'</td><td>'+(c.telefono||'—')+'</td>'+
+    const hist = c.historial_cierre || [];
+    const cierreTxt = (c.fecha_cierre_tentativa||'—') + (hist.length>0 ? ' <span class="hist-badge" onclick="verHistorialCierre(\''+c.id+'\')" title="ver historial">(pospuesto '+hist.length+'×)</span>' : '');
+    tr.innerHTML = '<td>'+c.fecha+'</td><td>'+c.nombre+'</td><td>'+(c.telefono||'—')+'</td><td>'+(c.tipo||'—')+'</td>'+
       '<td><select onchange="updateEstado(\''+c.id+'\', this.value)" style="width:auto;padding:3px 6px;font-size:12px;">'+
       ['contactado','seguimiento','cerrado','perdido'].map(s=>'<option value="'+s+'"'+(s===c.estado?' selected':'')+'>'+s+'</option>').join('')+
       '</select></td>'+
-      '<td>'+(c.fecha_cierre_tentativa||'—')+'</td>'+
+      '<td class="coment-cell" id="cierre-cell-'+c.id+'">'+cierreTxt+'<button class="edit-link" onclick="startEditCierre(\''+c.id+'\')">editar</button></td>'+
       '<td>'+(c.monto?fmt(c.monto):'—')+'</td>'+
       '<td class="coment-cell" id="coment-cell-'+c.id+'"><span class="comentario-txt">'+(c.comentarios||'—')+'</span><button class="edit-link" onclick="startEditComentario(\''+c.id+'\')">editar</button></td>';
     body.appendChild(tr);
   });
+}
+
+function startEditCierre(id){
+  const c = misContactos.find(x=>x.id===id);
+  const cell = document.getElementById('cierre-cell-'+id);
+  cell.innerHTML = '<div class="coment-edit-box"><input type="date" id="cierre-edit-'+id+'" value="'+(c.fecha_cierre_tentativa||'')+'">'+
+    '<button onclick="saveCierre(\''+id+'\')">Guardar</button></div>';
+}
+
+async function saveCierre(id){
+  const c = misContactos.find(x=>x.id===id);
+  const nuevaFecha = document.getElementById('cierre-edit-'+id).value;
+  const hist = c.historial_cierre || [];
+  if(c.fecha_cierre_tentativa && c.fecha_cierre_tentativa !== nuevaFecha){
+    hist.push({ anterior: c.fecha_cierre_tentativa, cambiado_en: todayISO() });
+  }
+  await client.from('prospectos').update({ fecha_cierre_tentativa: nuevaFecha || null, historial_cierre: hist }).eq('id', id).eq('created_by', userId);
+  loadContacts();
+}
+
+function verHistorialCierre(id){
+  const c = misContactos.find(x=>x.id===id);
+  const hist = c.historial_cierre || [];
+  const lines = hist.map((h,i)=>(i+1)+'. '+h.anterior+' → cambiada el '+h.cambiado_en).join('\n');
+  alert('Historial de fechas pospuestas para "'+c.nombre+'":\n\n'+lines+'\n\nFecha actual: '+(c.fecha_cierre_tentativa||'sin definir'));
 }
 
 async function updateEstado(id, estado){
