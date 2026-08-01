@@ -146,7 +146,7 @@
       <label>Teléfono</label>
       <input id="c-telefono" placeholder="33 1234 5678">
       <label>Tipo</label>
-      <select id="c-tipo"><option>Propietario</option><option>Asesor Inmobiliario</option></select>
+      <select id="c-tipo"><option>Propietario</option><option>Corredor independiente</option><option>Asesor Inmobiliario</option><option>Directivo Inmobiliaria</option></select>
       <label>Canal</label>
       <select id="c-canal"><option value="directo">Directo</option><option value="embajador">Embajador (yo registrando por ellos)</option><option value="macrolote">Macrolote</option></select>
       <label>Estado</label>
@@ -657,7 +657,7 @@ function startEditTipo(id){
   const c = prospectos.find(x=>x.id===id);
   const cell = document.getElementById('tipo-cell-'+id);
   cell.innerHTML = '<div class="coment-edit-box"><select id="tipo-edit-'+id+'">'+
-    ['Propietario','Asesor Inmobiliario'].map(t=>'<option'+(t===c.tipo?' selected':'')+'>'+t+'</option>').join('')+
+    ['Propietario','Corredor independiente','Asesor Inmobiliario','Directivo Inmobiliaria'].map(t=>'<option'+(t===c.tipo?' selected':'')+'>'+t+'</option>').join('')+
     '</select><button onclick="saveTipo(\''+id+'\')">Guardar</button></div>';
 }
 
