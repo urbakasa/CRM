@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<title>Urbakasa — Ruta a diciembre</title>
+<title>Urbakasa — Ruta a marzo</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;1,400;1,500&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
@@ -72,6 +72,8 @@
   .tr-acciones{margin-top:8px;display:flex;gap:12px;flex-wrap:wrap;align-items:center;}
   .tr-acciones select{width:auto;padding:3px 6px;font-size:12px;}
   .tr-acciones .edit-link{display:inline;padding:0;}
+  .tr-export{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;padding-bottom:10px;border-bottom:1px solid var(--line);}
+  .tr-copiar{font-weight:600;}
   #terrenos-badge{margin-left:4px;color:var(--rust);}
   .emb-row button{white-space:nowrap;font-size:12px;padding:6px 10px;background:var(--ink);color:var(--paper-card);border:none;border-radius:3px;cursor:pointer;}
   svg text{font-family:'IBM Plex Mono',monospace;}
@@ -85,7 +87,7 @@
   .eyebrow{font-family:'Inter',sans-serif;font-size:11px;font-weight:500;letter-spacing:.16em;color:var(--brass);}
   .who,.aviso-fecha,.stat-label,th,.tab,.month-name,.tr-folio,.tr-chip,svg text{font-family:'Inter',sans-serif;}
   .stat-label,th{letter-spacing:.12em;font-weight:500;}
-  .stat-val{font-family:'Playfair Display',serif;font-weight:400;font-size:28px;font-variant-numeric:lining-nums tabular-nums;}
+  .stat-val{font-family:'Inter',sans-serif;font-weight:500;font-size:26px;letter-spacing:-.01em;font-variant-numeric:lining-nums tabular-nums;}
   .tab{font-size:11.5px;letter-spacing:.12em;font-weight:500;padding:12px 14px;}
   .tab:hover{color:var(--ink);}
   .tab.active{color:var(--ink);border-bottom-color:var(--brass);}
@@ -113,7 +115,7 @@
   <div class="top">
     <div>
       <p class="eyebrow">Urbakasa · Inteligencia territorial</p>
-      <h1>Ruta a <em>diciembre</em></h1>
+      <h1>Ruta a <em>marzo</em></h1>
       <p class="sub" id="countdown">calculando plazo…</p>
       <p class="who" id="who-am-i"></p>
     </div>
@@ -312,7 +314,7 @@
 
   <div class="panel" id="panel-terrenos">
     <div class="card">
-      <p class="stat-sub">Terrenos registrados en urbakasa.com/registro-terreno — separados de tu pipeline hasta que decidas darles seguimiento.</p>
+      <p class="stat-sub">Terrenos y proyectos registrados en urbakasa.com/registro-terreno — separados de tu pipeline hasta que decidas darles seguimiento.</p>
       <div class="grid3" id="terrenos-resumen" style="margin-top:14px;"></div>
     </div>
     <div class="card">
@@ -324,13 +326,27 @@
           <option value="industrial">Industrial</option>
           <option value="habitacional">Habitacional</option>
           <option value="turistico">Turístico</option>
+          <option value="otro">Otro</option>
+        </select>
+        <label style="margin:0;">Ofrece</label>
+        <select id="tf-oferta" onchange="renderTerrenos()">
+          <option value="">Todo</option>
+          <option value="terreno">Terrenos</option>
+          <option value="proyecto">Proyectos</option>
         </select>
         <label style="margin:0;">Etapa</label>
         <select id="tf-etapa" onchange="renderTerrenos()"></select>
         <label style="margin:0;">Origen</label>
         <select id="tf-origen" onchange="renderTerrenos()"><option value="">Todos</option></select>
       </div>
-      <input id="tf-buscar" placeholder="Buscar por folio, nombre, municipio o WhatsApp" oninput="renderTerrenos()" style="margin-bottom:6px;">
+      <input id="tf-buscar" placeholder="Buscar por folio, nombre, municipio o WhatsApp" oninput="renderTerrenos()" style="margin-bottom:10px;">
+      <div class="tr-export">
+        <span class="stat-sub" id="tf-conteo" style="margin:0;"></span>
+        <span style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="sort-dir-btn" onclick="descargarTerrenosExcel()">Descargar Excel (CSV)</button>
+          <button class="sort-dir-btn" onclick="descargarFichasTxt()">Descargar fichas (TXT)</button>
+        </span>
+      </div>
       <div id="terrenos-body"></div>
       <p class="empty" id="terrenos-empty" style="display:none;">Aún no hay terrenos registrados.</p>
     </div>
@@ -338,7 +354,7 @@
 
   <div class="panel" id="panel-historial">
     <div class="card">
-      <h3>Historial semanal (03 ago – 31 dic 2026)</h3>
+      <h3>Historial semanal <span id="historial-rango"></span></h3>
       <table>
         <thead><tr><th>Semana</th><th>Alianzas</th><th>Dictámenes</th><th>Cobrado</th></tr></thead>
         <tbody id="historial-body"></tbody>
@@ -354,19 +370,23 @@
 const client = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 let userId = null;
 
-const PLAN_START = new Date('2026-08-03T00:00:00');
-const END_DATE = new Date('2026-12-31T23:59:59');
+const PLAN_START = new Date('2026-11-01T00:00:00');
+const END_DATE = new Date('2027-03-31T23:59:59');
+const PLAN_INICIO_ISO = '2026-11-01';
+const PLAN_FIN_ISO = '2027-03-31';
+const PLAN_FIN_TXT = '31 de marzo de 2027';
+const PLAN_RANGO_TXT = '1 nov 2026 – 31 mar 2027';
 const META_TOTAL = 405000;
 const DEUDA_URGENTE = 50000;
 const DEUDA_TOTAL = 160000;
 const META_ALIANZAS_SEMANA = 25;
 const META_DICTAMENES_SEMANA = 3;
 const METAS_MENSUALES = {
-  '2026-08':{label:'Agosto',gasto:49000,deuda:50000,total:99000},
-  '2026-09':{label:'Septiembre',gasto:49000,deuda:27500,total:76500},
-  '2026-10':{label:'Octubre',gasto:49000,deuda:27500,total:76500},
-  '2026-11':{label:'Noviembre',gasto:49000,deuda:27500,total:76500},
-  '2026-12':{label:'Diciembre',gasto:49000,deuda:27500,total:76500}
+  '2026-11':{label:'Noviembre',gasto:49000,deuda:50000,total:99000},
+  '2026-12':{label:'Diciembre',gasto:49000,deuda:27500,total:76500},
+  '2027-01':{label:'Enero',gasto:49000,deuda:27500,total:76500},
+  '2027-02':{label:'Febrero',gasto:49000,deuda:27500,total:76500},
+  '2027-03':{label:'Marzo',gasto:49000,deuda:27500,total:76500}
 };
 
 let prospectos = [];
@@ -376,6 +396,9 @@ let avisos = [];
 let leadsWeb = [];
 let terrenos = [];
 let terrenosError = null;
+
+// Solo cuentan los cobros dentro del plan (desde el 1 de noviembre de 2026)
+function cobrosDelPlan(){ return cobros.filter(k=>k.fecha>=PLAN_INICIO_ISO && k.fecha<=PLAN_FIN_ISO); }
 
 async function init(){
   const { data } = await client.auth.getSession();
@@ -540,10 +563,11 @@ function renderAll(){
 function renderCountdown(){
   const now = new Date();
   const days = Math.max(0, Math.ceil((END_DATE-now)/(1000*60*60*24)));
-  document.getElementById('countdown').textContent = days+' días restantes hasta el 31 de diciembre de 2026';
+  document.getElementById('countdown').textContent = days+' días restantes hasta el '+PLAN_FIN_TXT;
 }
 
 function renderResumen(){
+  const cobros = cobrosDelPlan();
   const wStart = weekStartISO();
   const weekContacts = prospectos.filter(c=>c.fecha>=wStart);
   const weekCobrosDictamen = cobros.filter(k=>k.fecha>=wStart && k.tipo!=='macrolote');
@@ -592,7 +616,7 @@ function renderResumen(){
       (vaBien ? '✓ Vas '+fmt(realHoy-esperadoHoy)+' arriba del ritmo esperado' : '✗ Vas '+fmt(esperadoHoy-realHoy)+' abajo del ritmo esperado')+
       '</p>';
   } else {
-    ritmoContainer.innerHTML = '<p class="stat-sub">Fuera del rango del plan (ago-dic 2026).</p>';
+    ritmoContainer.innerHTML = (todayISO() < PLAN_INICIO_ISO ? '<p class="stat-sub">El plan arranca el 1 de noviembre de 2026. Los cobros anteriores no cuentan para estas metas.</p>' : '<p class="stat-sub">Fuera del rango del plan ('+PLAN_RANGO_TXT+').</p>');
   }
 
   const container = document.getElementById('month-breakdown');
@@ -608,6 +632,7 @@ function renderResumen(){
 }
 
 function renderChart(){
+  const cobros = cobrosDelPlan();
   const byMonth = {};
   cobros.forEach(k=>{ const mk = monthKey(k.fecha); byMonth[mk] = (byMonth[mk]||0)+Number(k.monto); });
   const months = Object.keys(METAS_MENSUALES);
@@ -932,7 +957,7 @@ async function deleteLead(id){
 // ───────── Terrenos (registro-terreno en urbakasa.com) ─────────
 const TR_ETAPAS = ['Nuevo','Datos completos','Aplica requerimiento','Candidato red','Hoy no','DVT solicitado'];
 const TR_L = {
-  tipo:{agricola:'Agrícola',industrial:'Industrial',habitacional:'Habitacional',turistico:'Turístico'},
+  tipo:{agricola:'Agrícola',industrial:'Industrial',habitacional:'Habitacional',turistico:'Turístico',otro:'Otro'},
   rol:{propietario:'Propietario',corredor:'Corredor',asesor:'Asesor inmobiliario'},
   agua:{concesion_propia:'Pozo con concesión propia',acuerdo_vecino:'Acuerdo con un vecino',canal_riego:'Canal de riego',rio:'Río',temporal:'Temporal',red_municipal:'Red municipal',sin_agua:'No tiene agua',no_se:'No sabe'},
   acceso:{federal:'Carretera federal o autopista',estatal:'Carretera estatal',camino:'Camino municipal o terracería',no_se:'No sabe'},
@@ -944,6 +969,27 @@ const TR_L = {
   regimen:{escritura:'Con escritura',ejidal:'Ejidal',sucesion:'En sucesión',no_se:'Régimen: no sabe'},
   disponibilidad:{venta:'Venta',renta:'Renta',ambas:'Venta o renta',aportacion:'Aportación a proyecto',abierto:'Abierto a opciones'}
 };
+const TR_SUBS = {
+  huerta_aguacate:'Huerta de aguacate', huerta_berries:'Huerta de berries', plantacion_agave:'Plantación de agave', huerta_citricos:'Huerta de limón o cítricos', invernadero:'Invernaderos o agricultura protegida',
+  parque_industrial:'Parque industrial completo', nave_industrial:'Nave industrial', centro_logistico:'Centro logístico o bodegas', agroindustria:'Agroindustria o planta de empaque',
+  fracc_trunco:'Fraccionamiento sin terminar', fracc_permisos:'Fraccionamiento con permisos, sin construir', desarrollo_vertical:'Desarrollo vertical', lotes_urbanizados:'Lotes urbanizados',
+  hotel:'Hotel o proyecto hotelero', residencial_turistico:'Desarrollo residencial turístico', ecoturistico:'Parque ecoturístico'
+};
+function esProyecto(t){ return t.oferta==='proyecto'; }
+function trOferta(t){ return esProyecto(t) ? 'Proyecto' : 'Terreno'; }
+// "Huerta de aguacate", "Otro: Planta de reciclaje" o el texto libre cuando el tipo es Otro
+function trProyectoSub(t){
+  if(!esProyecto(t)) return '';
+  if(t.tipo==='otro' || t.proyecto_sub==='otro') return t.proyecto_otro ? (t.tipo==='otro' ? t.proyecto_otro : 'Otro: '+t.proyecto_otro) : 'Otro';
+  return TR_SUBS[t.proyecto_sub] || t.proyecto_sub || '';
+}
+// Línea corta: "Terreno agrícola" / "Proyecto agrícola · Huerta de aguacate" / "Proyecto · Cementerio privado"
+function trOfertaTipo(t){
+  const tipo = t.tipo && t.tipo!=='otro' ? trLabel('tipo',t.tipo).toLowerCase() : '';
+  const base = trOferta(t) + (tipo ? ' '+tipo : '');
+  const sub = trProyectoSub(t);
+  return base + (sub ? ' · '+sub : '');
+}
 const TR_ROL_PIPELINE = { propietario:'Propietario', corredor:'Corredor independiente', asesor:'Asesor Inmobiliario' };
 
 function esc(s){
@@ -1005,21 +1051,10 @@ function renderTerrenos(){
     empty.textContent = 'No se pudieron leer los terrenos ('+terrenosError+'). Revisa que ya corriste el SQL del CRM en Supabase.';
     return;
   }
-  const fTipo = document.getElementById('tf-tipo').value;
-  const fEtapa = document.getElementById('tf-etapa').value;
-  const fOrigen = document.getElementById('tf-origen').value;
-  const q = document.getElementById('tf-buscar').value.trim().toLowerCase();
-  const lista = terrenos.filter(t=>{
-    if(fTipo && t.tipo!==fTipo) return false;
-    if(fEtapa==='__activos' && t.etapa==='Hoy no') return false;
-    if(fEtapa && fEtapa!=='__activos' && t.etapa!==fEtapa) return false;
-    if(fOrigen && t.origen!==fOrigen) return false;
-    if(q){
-      const hay = [t.folio,t.nombre,t.municipio,t.estado,t.whatsapp].join(' ').toLowerCase();
-      if(!hay.includes(q)) return false;
-    }
-    return true;
-  });
+  const lista = terrenosFiltrados();
+  document.getElementById('tf-conteo').textContent = lista.length===terrenos.length
+    ? 'Mostrando los '+lista.length+' registros'
+    : 'Mostrando '+lista.length+' de '+terrenos.length+' registros';
   if(lista.length===0){
     empty.style.display='block';
     empty.textContent = terrenos.length ? 'Ningún terreno coincide con estos filtros.' : 'Aún no hay terrenos registrados.';
@@ -1030,10 +1065,11 @@ function renderTerrenos(){
   lista.forEach(t=>{
     const div = document.createElement('div');
     div.className = 'aviso-item';
+    const chipOferta = esProyecto(t) ? '<span class="tr-chip">proyecto</span>' : '';
     const chipEtapa = '<span class="tr-chip'+(t.etapa==='Nuevo'?' nuevo':(t.etapa==='Aplica requerimiento'||t.etapa==='DVT solicitado'?' ok':''))+'">'+esc(t.etapa)+'</span>';
-    const linea1 = '<span class="tr-folio">'+esc(t.folio||'sin folio')+'</span>'+chipEtapa+
+    const linea1 = '<span class="tr-folio">'+esc(t.folio||'sin folio')+'</span>'+chipOferta+chipEtapa+
       (t.en_pipeline ? '<span class="tr-chip ok">en pipeline</span>' : '');
-    const linea2 = '<span class="aviso-fecha">'+esc(trFecha(t.created_at))+' · '+esc(trLabel('tipo',t.tipo)||'sin tipo')+
+    const linea2 = '<span class="aviso-fecha">'+esc(trFecha(t.created_at))+' · '+esc(trOferta(t))+' · '+esc(trLabel('tipo',t.tipo)||'sin tipo')+
       (t.origen ? ' · origen: '+esc(t.origen) : '')+'</span>';
     const wa = String(t.whatsapp||'').replace(/\D/g,'');
     const waLink = wa ? '<a href="https://wa.me/52'+esc(wa)+'" target="_blank" rel="noopener" style="color:var(--moss);">WhatsApp '+esc(trTel(wa))+'</a>' : '';
@@ -1050,16 +1086,166 @@ function renderTerrenos(){
       '<p style="margin:0 0 2px;">'+linea1+'</p>'+
       '<p style="margin:0;">'+linea2+'</p>'+
       '<p style="margin:6px 0 2px;"><strong>'+esc(t.nombre)+'</strong> — '+esc(trLabel('rol',t.rol))+(waLink?' · '+waLink:'')+'</p>'+
+      '<p class="stat-sub" style="margin:2px 0;color:var(--ink);">'+esc(trOfertaTipo(t))+'</p>'+
       '<p class="stat-sub" style="margin:2px 0;">'+base+'</p>'+
       (detalle ? '<p class="stat-sub" style="margin:2px 0;">'+detalle+'</p>' : '')+
       '<div id="tr-notas-'+t.id+'"><p class="stat-sub" style="margin:4px 0 0;">'+(t.notas ? 'Notas: '+esc(t.notas) : '<em>Sin notas</em>')+'</p></div>'+
-      '<div class="tr-acciones">'+etapaSel+kmz+
+      '<div class="tr-acciones">'+etapaSel+
+        '<button class="edit-link tr-copiar" id="tr-copiar-'+t.id+'" onclick="copiarFicha(\''+t.id+'\')">copiar ficha para WhatsApp</button>'+kmz+
         '<button class="edit-link" onclick="startEditNotasTerreno(\''+t.id+'\')">'+(t.notas?'editar notas':'agregar notas')+'</button>'+
         (t.en_pipeline ? '' : '<button class="edit-link" onclick="agregarTerrenoAPipeline(\''+t.id+'\')">agregar a pipeline</button>')+
         '<button class="del" onclick="deleteTerreno(\''+t.id+'\')">eliminar</button>'+
       '</div>';
     body.appendChild(div);
   });
+}
+
+function terrenosFiltrados(){
+  const fTipo = document.getElementById('tf-tipo').value;
+  const fOferta = document.getElementById('tf-oferta').value;
+  const fEtapa = document.getElementById('tf-etapa').value;
+  const fOrigen = document.getElementById('tf-origen').value;
+  const q = document.getElementById('tf-buscar').value.trim().toLowerCase();
+  return terrenos.filter(t=>{
+    if(fTipo && t.tipo!==fTipo) return false;
+    if(fOferta && (t.oferta||'terreno')!==fOferta) return false;
+    if(fEtapa==='__activos' && t.etapa==='Hoy no') return false;
+    if(fEtapa && fEtapa!=='__activos' && t.etapa!==fEtapa) return false;
+    if(fOrigen && t.origen!==fOrigen) return false;
+    if(q){
+      const hay = [t.folio,t.nombre,t.municipio,t.estado,t.whatsapp,t.proyecto_otro].join(' ').toLowerCase();
+      if(!hay.includes(q)) return false;
+    }
+    return true;
+  });
+}
+
+// Ficha ordenada para pegar en el chat del contacto (formato de WhatsApp: *negritas*)
+function fichaTerreno(t){
+  const fecha = new Date(t.created_at).toLocaleDateString('es-MX',{ timeZone:'America/Mexico_City', day:'numeric', month:'long', year:'numeric' });
+  const sup = t.superficie_ha ? Number(t.superficie_ha).toLocaleString('es-MX')+' ha' : 'No indicada';
+  const filas = [];
+  const fila = (nombre, valor)=>{ if(valor) filas.push(nombre+': '+valor); };
+  if(t.tipo!=='otro') fila('Tipo', trLabel('tipo',t.tipo));
+  fila('Tipo de proyecto', trProyectoSub(t));
+  fila('Ubicación', [t.municipio,t.estado].filter(Boolean).join(', '));
+  fila('Superficie', sup);
+  fila('Agua', trLabel('agua',t.agua));
+  fila('Qué se siembra hoy', t.cultivo);
+  fila('Acceso', trLabel('acceso',t.acceso));
+  fila('Energía eléctrica', trLabel('energia',t.energia));
+  fila('Servicios', trLabel('servicios',t.servicios));
+  fila('Distancia a la mancha urbana', trLabel('distancia_urbana',t.distancia_urbana));
+  fila('Atractivos cercanos', trLabel('atractivos',t.atractivos));
+  fila('Uso de suelo', trLabel('uso_suelo',t.uso_suelo));
+  fila('Régimen', t.regimen==='no_se' ? 'No sabe' : trLabel('regimen',t.regimen));
+  fila('Disponible para', trLabel('disponibilidad',t.disponibilidad));
+  fila('KMZ', t.tiene_kmz ? 'Recibido' : 'Pendiente');
+  return [
+    '*Urbakasa · Registro '+(t.folio||'')+'*',
+    'Registrado el '+fecha,
+    '',
+    '*Contacto*',
+    (t.nombre||'')+' — '+trLabel('rol',t.rol),
+    'WhatsApp: '+trTel(t.whatsapp),
+    '',
+    esProyecto(t) ? '*Proyecto*' : '*Terreno*'
+  ].concat(filas).join('\n');
+}
+
+async function copiarTexto(texto){
+  try{
+    await navigator.clipboard.writeText(texto);
+    return true;
+  }catch(e){
+    const ta = document.createElement('textarea');
+    ta.value = texto; ta.style.position='fixed'; ta.style.opacity='0';
+    document.body.appendChild(ta); ta.select();
+    let ok = false; try{ ok = document.execCommand('copy'); }catch(_){}
+    ta.remove();
+    return ok;
+  }
+}
+
+async function copiarFicha(id){
+  const t = terrenos.find(x=>x.id===id);
+  const ok = await copiarTexto(fichaTerreno(t));
+  const btn = document.getElementById('tr-copiar-'+id);
+  if(!ok){ alert('No se pudo copiar automáticamente. Copia este texto:\n\n'+fichaTerreno(t)); return; }
+  if(btn){ btn.textContent = 'copiada ✓ pégala en el chat'; setTimeout(()=>{ btn.textContent = 'copiar ficha para WhatsApp'; }, 2500); }
+}
+
+function descargarArchivo(nombre, contenido, tipo){
+  const blob = new Blob([contenido], { type: tipo });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = nombre;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url), 1000);
+}
+
+function nombreArchivoTerrenos(ext){
+  const partes = ['terrenos'];
+  const fTipo = document.getElementById('tf-tipo').value;
+  const fOrigen = document.getElementById('tf-origen').value;
+  const fOferta = document.getElementById('tf-oferta').value;
+  if(fOferta) partes.push(fOferta+'s');
+  if(fTipo) partes.push(fTipo);
+  if(fOrigen) partes.push(fOrigen.replace(/[^a-z0-9-]/gi,''));
+  partes.push(new Date().toLocaleDateString('en-CA',{ timeZone:'America/Mexico_City' }));
+  return partes.join('_')+'.'+ext;
+}
+
+function descargarTerrenosExcel(){
+  const lista = terrenosFiltrados();
+  if(!lista.length){ alert('No hay terrenos con estos filtros.'); return; }
+  const cols = [
+    ['Folio', t=>t.folio],
+    ['Fecha de registro', t=>new Date(t.created_at).toLocaleString('es-MX',{ timeZone:'America/Mexico_City' })],
+    ['Etapa', t=>t.etapa],
+    ['En pipeline', t=>t.en_pipeline?'Sí':'No'],
+    ['Ofrece', t=>trOferta(t)],
+    ['Tipo', t=>trLabel('tipo',t.tipo)],
+    ['Tipo de proyecto', t=>trProyectoSub(t)],
+    ['Nombre', t=>t.nombre],
+    ['Rol', t=>trLabel('rol',t.rol)],
+    ['WhatsApp', t=>trTel(t.whatsapp)],
+    ['Estado', t=>t.estado],
+    ['Municipio', t=>t.municipio],
+    ['Superficie (ha)', t=>t.superficie_ha],
+    ['Agua', t=>trLabel('agua',t.agua)],
+    ['Qué se siembra hoy', t=>t.cultivo],
+    ['Acceso', t=>trLabel('acceso',t.acceso)],
+    ['Energía eléctrica', t=>trLabel('energia',t.energia)],
+    ['Servicios', t=>trLabel('servicios',t.servicios)],
+    ['Distancia a la mancha urbana', t=>trLabel('distancia_urbana',t.distancia_urbana)],
+    ['Atractivos cercanos', t=>trLabel('atractivos',t.atractivos)],
+    ['Uso de suelo', t=>trLabel('uso_suelo',t.uso_suelo)],
+    ['Régimen', t=>t.regimen==='no_se' ? 'No sabe' : trLabel('regimen',t.regimen)],
+    ['Disponible para', t=>trLabel('disponibilidad',t.disponibilidad)],
+    ['KMZ', t=>t.tiene_kmz?'Recibido':'Pendiente'],
+    ['Origen', t=>t.origen],
+    ['Notas', t=>t.notas]
+  ];
+  const celda = v=>{
+    let x = (v===null||v===undefined) ? '' : String(v);
+    if(/^[=+\-@]/.test(x)) x = "'"+x;  // evita que Excel lo trate como fórmula
+    return '"'+x.replace(/"/g,'""')+'"';
+  };
+  const filas = [cols.map(c=>celda(c[0])).join(',')].concat(lista.map(t=>cols.map(c=>celda(c[1](t))).join(',')));
+  descargarArchivo(nombreArchivoTerrenos('csv'), '﻿'+filas.join('\r\n'), 'text/csv;charset=utf-8');
+}
+
+function descargarFichasTxt(){
+  const lista = terrenosFiltrados();
+  if(!lista.length){ alert('No hay terrenos con estos filtros.'); return; }
+  const texto = lista.map(t=>{
+    const extra = ['Etapa: '+t.etapa+(t.en_pipeline?' · en pipeline':'')];
+    if(t.origen) extra.push('Origen: '+t.origen);
+    if(t.notas) extra.push('Notas: '+t.notas);
+    return fichaTerreno(t)+'\n\n'+extra.join('\n');
+  }).join('\n\n────────────────────\n\n');
+  descargarArchivo(nombreArchivoTerrenos('txt'), '﻿'+texto, 'text/plain;charset=utf-8');
 }
 
 async function updateEtapaTerreno(id, etapa){
@@ -1102,10 +1288,10 @@ async function agregarTerrenoAPipeline(id){
   const t = terrenos.find(x=>x.id===id);
   const sup = t.superficie_ha ? Number(t.superficie_ha).toLocaleString('es-MX')+' ha' : 'superficie no indicada';
   const partes = [
-    'Registro de terreno '+(t.folio||''),
-    trLabel('tipo',t.tipo)+' en '+t.municipio+', '+t.estado+' · '+sup,
+    'Registro '+(t.folio||''),
+    trOfertaTipo(t)+' en '+t.municipio+', '+t.estado+' · '+sup,
     trLabel('disponibilidad',t.disponibilidad)+' · '+trLabel('regimen',t.regimen)
-  ].concat(trDetalle(t));
+  ].filter(Boolean).concat(trDetalle(t));
   partes.push(t.tiene_kmz ? 'KMZ recibido' : 'Sin KMZ');
   if(t.origen) partes.push('Origen: '+t.origen);
   const nuevoContacto = {
@@ -1140,7 +1326,7 @@ function getWeeks(){
   const weeks = [];
   let cursor = new Date(PLAN_START);
   const day = (cursor.getDay()+6)%7;
-  cursor.setDate(cursor.getDate()-day);
+  if(day!==0) cursor.setDate(cursor.getDate()+(7-day));
   while(cursor <= END_DATE){
     const start = new Date(cursor);
     const end = new Date(cursor);
@@ -1152,6 +1338,8 @@ function getWeeks(){
 }
 
 function renderHistorial(){
+  const cobros = cobrosDelPlan();
+  document.getElementById('historial-rango').textContent = '('+PLAN_RANGO_TXT+')';
   const body = document.getElementById('historial-body');
   body.innerHTML = '';
   const weeks = getWeeks();
