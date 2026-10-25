@@ -4,9 +4,9 @@
 <meta charset="UTF-8">
 <title>Urbakasa — Mi pipeline</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=Public+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;1,400;1,500&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
-  :root{--paper:#F3EEE2;--ink:#1E3A34;--ink-soft:#3E5850;--line:#C9C2AE;--paper-card:#FAF7EF;--moss:#3F6B44;--moss-soft:#DCE8D8;--brass:#8A5A22;--brass-soft:#E9DAC1;--rust:#9C3E28;--rust-soft:#F2DCD3;}
+  :root{color-scheme:dark;--paper:#101012;--paper-card:#1E2026;--field:#16171B;--ink:#F4F1EA;--ink-soft:#A9A49A;--line:#2E3038;--brass:#C9A84C;--brass-soft:rgba(201,168,76,.14);--rust:#D9826B;--rust-soft:rgba(217,130,107,.14);--moss:#8FBF8F;--moss-soft:rgba(143,191,143,.13);}
   *{box-sizing:border-box;}
   body{margin:0;background:var(--paper);color:var(--ink);font-family:'Public Sans',sans-serif;}
   .wrap{max-width:680px;margin:0 auto;padding:28px 20px 60px;}
@@ -43,6 +43,37 @@
   .aviso-item{border-bottom:1px solid var(--line);padding:10px 0;}
   .aviso-item:last-child{border-bottom:none;}
   .aviso-fecha{font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--ink-soft);}
+
+  /* ── Sistema visual urbakasa.com ── */
+  body{font-family:'Inter',sans-serif;-webkit-font-smoothing:antialiased;}
+  h1,h3{font-family:'Playfair Display',serif;font-weight:400;letter-spacing:-.01em;}
+  h1{font-size:34px;line-height:1.1;}
+  h1 em,h3 em{font-style:italic;color:var(--brass);}
+  h3{font-size:19px;}
+  .eyebrow{font-family:'Inter',sans-serif;font-size:11px;font-weight:500;letter-spacing:.16em;color:var(--brass);}
+  .who,.aviso-fecha,.stat-label,th,.tab,.month-name,.tr-folio,.tr-chip,svg text{font-family:'Inter',sans-serif;}
+  .stat-label,th{letter-spacing:.12em;font-weight:500;}
+  .stat-val{font-family:'Playfair Display',serif;font-weight:400;font-size:28px;font-variant-numeric:lining-nums tabular-nums;}
+  .tab{font-size:11.5px;letter-spacing:.12em;font-weight:500;padding:12px 14px;}
+  .tab:hover{color:var(--ink);}
+  .tab.active{color:var(--ink);border-bottom-color:var(--brass);}
+  .card{border-radius:2px;padding:20px 22px;}
+  input,select,textarea{background:var(--field);color:var(--ink);border-color:var(--line);border-radius:2px;font-family:'Inter',sans-serif;}
+  input:focus,select:focus,textarea:focus{outline:none;border-color:var(--brass);}
+  input::placeholder,textarea::placeholder{color:#6F6B64;}
+  button.action,.coment-edit-box button,.emb-row button{background:var(--brass);color:#101012;font-weight:600;letter-spacing:.02em;border-radius:2px;}
+  button.action:hover,.coment-edit-box button:hover,.emb-row button:hover{background:#D8BC6A;}
+  button.logout,.sort-dir-btn{border-color:var(--line);color:var(--ink-soft);border-radius:2px;}
+  button.logout:hover,.sort-dir-btn:hover{border-color:var(--brass);color:var(--ink);}
+  .edit-link{color:var(--ink-soft);}
+  .edit-link:hover{color:var(--brass);}
+  a{color:var(--brass);}
+  .week-row.current{background:var(--brass-soft);}
+  .tr-folio{color:var(--brass);letter-spacing:.04em;}
+  .ritmo-ok{color:var(--moss);}
+  .ritmo-mal{color:var(--rust);}
+  .ukfoot{max-width:inherit;margin-top:40px;padding-top:18px;border-top:1px solid var(--line);font-size:11.5px;color:#6F6B64;display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;}
+  .ukfoot em{font-family:'Playfair Display',serif;font-size:14px;color:var(--ink-soft);}
 </style>
 </head>
 <body>
@@ -50,7 +81,7 @@
   <div class="top">
     <div>
       <p class="eyebrow">Urbakasa</p>
-      <h1>Mi pipeline</h1>
+      <h1>Mi <em>pipeline</em></h1>
       <p class="who" id="who-am-i"></p>
     </div>
     <button class="logout" onclick="logout()">Cerrar sesión</button>
@@ -130,6 +161,7 @@
     </div>
     <p class="empty" id="contacts-empty" style="display:none;">Aún no has registrado prospectos.</p>
   </div>
+<div class="ukfoot"><em>La firma del macrolote.</em><span>© Urbakasa · Criterio validado | Riesgo mitigado</span></div>
 </div>
 
 <script src="config.js"></script>

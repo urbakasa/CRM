@@ -4,24 +4,32 @@
 <meta charset="UTF-8">
 <title>Urbakasa — Acceso</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=Public+Sans:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;1,400&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
+  :root{color-scheme:dark;}
   *{box-sizing:border-box;}
-  body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#F3EEE2;color:#1E3A34;font-family:'Public Sans',sans-serif;}
-  .box{width:100%;max-width:340px;padding:32px;background:#FAF7EF;border:1px solid #C9C2AE;border-radius:4px;}
-  h1{font-family:'Fraunces',serif;font-weight:600;font-size:24px;margin:0 0 4px;}
-  p.sub{color:#3E5850;font-size:13px;margin:0 0 20px;}
-  label{display:block;font-size:12px;color:#3E5850;margin:12px 0 4px;}
-  input{width:100%;padding:9px 10px;border:1px solid #C9C2AE;border-radius:3px;font-size:14px;}
-  button{width:100%;margin-top:18px;background:#1E3A34;color:#FAF7EF;border:none;padding:10px;border-radius:3px;font-size:14px;cursor:pointer;}
+  body{margin:0;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#101012;color:#F4F1EA;font-family:'Inter',sans-serif;-webkit-font-smoothing:antialiased;padding:24px 16px;}
+  .box{width:100%;max-width:360px;padding:36px 32px;background:#1E2026;border:1px solid #2E3038;border-radius:2px;}
+  .eyebrow{font-size:11px;font-weight:500;letter-spacing:.16em;text-transform:uppercase;color:#C9A84C;margin:0 0 10px;}
+  h1{font-family:'Playfair Display',serif;font-weight:400;font-size:30px;line-height:1.1;margin:0 0 6px;}
+  h1 em{font-style:italic;color:#C9A84C;}
+  p.sub{color:#A9A49A;font-size:13px;margin:0 0 22px;}
+  label{display:block;font-size:12px;color:#A9A49A;margin:14px 0 5px;}
+  input{width:100%;padding:10px 12px;border:1px solid #2E3038;border-radius:2px;font-size:14px;background:#16171B;color:#F4F1EA;font-family:'Inter',sans-serif;}
+  input:focus{outline:none;border-color:#C9A84C;}
+  input::placeholder{color:#6F6B64;}
+  button{width:100%;margin-top:22px;background:#C9A84C;color:#101012;border:none;padding:11px;border-radius:2px;font-size:14px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif;}
+  button:hover{background:#D8BC6A;}
   button:disabled{opacity:0.6;}
-  .error{color:#9C3E28;font-size:13px;margin-top:10px;display:none;}
+  .error{color:#D9826B;font-size:13px;margin-top:12px;display:none;}
+  .foot{margin-top:22px;font-family:'Playfair Display',serif;font-style:italic;font-size:14px;color:#6F6B64;}
 </style>
 </head>
 <body>
 <div class="box">
-  <h1>Urbakasa</h1>
-  <p class="sub">Inteligencia territorial — acceso al panel</p>
+  <p class="eyebrow">Urbakasa · Inteligencia territorial</p>
+  <h1>Acceso al <em>panel</em></h1>
+  <p class="sub">Entra con tu correo y contraseña.</p>
   <label>Correo</label>
   <input id="email" type="email" placeholder="tu@correo.com">
   <label>Contraseña</label>
@@ -29,6 +37,7 @@
   <button id="btn" onclick="login()">Entrar</button>
   <p class="error" id="error"></p>
 </div>
+<p class="foot">La firma del macrolote.</p>
 
 <script src="config.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
