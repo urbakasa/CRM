@@ -65,6 +65,14 @@
   .emb-row{display:flex;gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line);}
   .emb-row:last-child{border-bottom:none;}
   .emb-row input{flex:1;}
+  .tr-folio{font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:500;color:var(--ink);}
+  .tr-chip{display:inline-block;font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.04em;text-transform:uppercase;padding:2px 7px;border-radius:3px;background:var(--brass-soft);color:var(--brass);margin-left:6px;}
+  .tr-chip.nuevo{background:var(--rust-soft);color:var(--rust);}
+  .tr-chip.ok{background:var(--moss-soft);color:var(--moss);}
+  .tr-acciones{margin-top:8px;display:flex;gap:12px;flex-wrap:wrap;align-items:center;}
+  .tr-acciones select{width:auto;padding:3px 6px;font-size:12px;}
+  .tr-acciones .edit-link{display:inline;padding:0;}
+  #terrenos-badge{margin-left:4px;color:var(--rust);}
   .emb-row button{white-space:nowrap;font-size:12px;padding:6px 10px;background:var(--ink);color:var(--paper-card);border:none;border-radius:3px;cursor:pointer;}
   svg text{font-family:'IBM Plex Mono',monospace;}
 </style>
@@ -88,6 +96,7 @@
     <button class="tab" data-tab="embajadores">Embajadores</button>
     <button class="tab" data-tab="avisos">Avisos</button>
     <button class="tab" data-tab="leadsweb">Leads Web</button>
+    <button class="tab" data-tab="terrenos">Terrenos<span id="terrenos-badge"></span></button>
     <button class="tab" data-tab="historial">Historial</button>
   </div>
 
@@ -270,6 +279,32 @@
     </div>
   </div>
 
+  <div class="panel" id="panel-terrenos">
+    <div class="card">
+      <p class="stat-sub">Terrenos registrados en urbakasa.com/registro-terreno — separados de tu pipeline hasta que decidas darles seguimiento.</p>
+      <div class="grid3" id="terrenos-resumen" style="margin-top:14px;"></div>
+    </div>
+    <div class="card">
+      <div class="sort-controls">
+        <label style="margin:0;">Tipo</label>
+        <select id="tf-tipo" onchange="renderTerrenos()">
+          <option value="">Todos</option>
+          <option value="agricola">Agrícola</option>
+          <option value="industrial">Industrial</option>
+          <option value="habitacional">Habitacional</option>
+          <option value="turistico">Turístico</option>
+        </select>
+        <label style="margin:0;">Etapa</label>
+        <select id="tf-etapa" onchange="renderTerrenos()"></select>
+        <label style="margin:0;">Origen</label>
+        <select id="tf-origen" onchange="renderTerrenos()"><option value="">Todos</option></select>
+      </div>
+      <input id="tf-buscar" placeholder="Buscar por folio, nombre, municipio o WhatsApp" oninput="renderTerrenos()" style="margin-bottom:6px;">
+      <div id="terrenos-body"></div>
+      <p class="empty" id="terrenos-empty" style="display:none;">Aún no hay terrenos registrados.</p>
+    </div>
+  </div>
+
   <div class="panel" id="panel-historial">
     <div class="card">
       <h3>Historial semanal (03 ago – 31 dic 2026)</h3>
@@ -307,6 +342,8 @@ let cobros = [];
 let perfiles = [];
 let avisos = [];
 let leadsWeb = [];
+let terrenos = [];
+let terrenosError = null;
 
 async function init(){
   const { data } = await client.auth.getSession();
@@ -326,13 +363,16 @@ async function logout(){
 }
 
 async function loadAll(){
-  const [p, c, pf, av, lw] = await Promise.all([
+  const [p, c, pf, av, lw, tr] = await Promise.all([
     client.from('prospectos').select('*').order('fecha', { ascending: false }),
     client.from('cobros').select('*').order('fecha', { ascending: false }),
     client.from('perfiles').select('*').order('rol'),
     client.from('avisos').select('*').order('created_at', { ascending: false }),
-    client.from('leads_propietarios').select('*').order('fecha', { ascending: false })
+    client.from('leads_propietarios').select('*').order('fecha', { ascending: false }),
+    client.from('terrenos_captados').select('*').order('created_at', { ascending: false })
   ]);
+  terrenos = tr.data || [];
+  terrenosError = tr.error ? tr.error.message : null;
   prospectos = p.data || [];
   cobros = c.data || [];
   perfiles = pf.data || [];
@@ -441,7 +481,7 @@ async function updatePerfilNombre(id){
 }
 
 function exportarJSON(){
-  const payload = { exportado: new Date().toISOString(), prospectos, cobros };
+  const payload = { exportado: new Date().toISOString(), prospectos, cobros, terrenos };
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -461,6 +501,7 @@ function renderAll(){
   renderPerfiles();
   renderAvisos();
   renderLeadsWeb();
+  renderTerrenos();
   renderHistorial();
 }
 
@@ -852,6 +893,213 @@ async function agregarLeadAPipeline(id){
 async function deleteLead(id){
   if(!confirm('¿Seguro que quieres eliminar este lead? Esta acción no se puede deshacer.')) return;
   await client.from('leads_propietarios').delete().eq('id', id);
+  await loadAll();
+  renderAll();
+}
+
+// ───────── Terrenos (registro-terreno en urbakasa.com) ─────────
+const TR_ETAPAS = ['Nuevo','Datos completos','Aplica requerimiento','Candidato red','Hoy no','DVT solicitado'];
+const TR_L = {
+  tipo:{agricola:'Agrícola',industrial:'Industrial',habitacional:'Habitacional',turistico:'Turístico'},
+  rol:{propietario:'Propietario',corredor:'Corredor',asesor:'Asesor inmobiliario'},
+  agua:{concesion_propia:'Pozo con concesión propia',acuerdo_vecino:'Acuerdo con un vecino',canal_riego:'Canal de riego',rio:'Río',temporal:'Temporal',red_municipal:'Red municipal',sin_agua:'No tiene agua',no_se:'No sabe'},
+  acceso:{federal:'Carretera federal o autopista',estatal:'Carretera estatal',camino:'Camino municipal o terracería',no_se:'No sabe'},
+  energia:{en_terreno:'En el terreno o colindante',menos_1km:'A menos de 1 km',mas_lejos:'Más lejos',no_se:'No sabe'},
+  distancia_urbana:{colinda:'Colinda',menos_5km:'Menos de 5 km','5_15km':'De 5 a 15 km',mas_15km:'Más de 15 km',no_se:'No sabe'},
+  uso_suelo:{industrial:'Industrial',habitacional:'Habitacional',comercial_mixto:'Comercial o mixto',turistico:'Turístico',agricola:'Agrícola',no_se:'No sabe'},
+  servicios:{agua_potable:'Agua potable',drenaje:'Drenaje',luz:'Luz',ninguno:'Ninguno',no_se:'No sabe'},
+  atractivos:{playa_costa:'Playa o costa',lago_rio:'Lago, presa o río',montana_bosque:'Montaña o bosque',pueblo_zona_turistica:'Pueblo o zona turística',ninguno:'Ninguno',no_se:'No sabe'},
+  regimen:{escritura:'Con escritura',ejidal:'Ejidal',sucesion:'En sucesión',no_se:'Régimen: no sabe'},
+  disponibilidad:{venta:'Venta',renta:'Renta',ambas:'Venta o renta',aportacion:'Aportación a proyecto',abierto:'Abierto a opciones'}
+};
+const TR_ROL_PIPELINE = { propietario:'Propietario', corredor:'Corredor independiente', asesor:'Asesor Inmobiliario' };
+
+function esc(s){
+  return String(s===null||s===undefined?'':s).replace(/[&<>"']/g, ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+}
+function trLabel(campo, v){
+  if(v===null||v===undefined||v==='') return '';
+  if(Array.isArray(v)) return v.map(x=>(TR_L[campo]&&TR_L[campo][x])||x).join(', ');
+  return (TR_L[campo] && TR_L[campo][v]) || v;
+}
+function trTel(wa){
+  const d = String(wa||'').replace(/\D/g,'');
+  return d.length===10 ? d.slice(0,2)+' '+d.slice(2,6)+' '+d.slice(6) : d;
+}
+function trFecha(iso){
+  return new Date(iso).toLocaleString('es-MX',{ timeZone:'America/Mexico_City', day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' });
+}
+function trDetalle(t){
+  const partes = [];
+  const add = (nombre, campo)=>{ const v = trLabel(campo, t[campo]); if(v) partes.push(nombre+': '+v); };
+  add('Agua','agua');
+  if(t.cultivo) partes.push('Cultivo: '+t.cultivo);
+  add('Acceso','acceso');
+  add('Energía','energia');
+  add('Servicios','servicios');
+  add('Mancha urbana','distancia_urbana');
+  add('Atractivos','atractivos');
+  add('Uso de suelo','uso_suelo');
+  return partes;
+}
+
+function prepararFiltrosTerrenos(){
+  const etapaSel = document.getElementById('tf-etapa');
+  if(!etapaSel.options.length){
+    etapaSel.innerHTML = '<option value="">Todas</option><option value="__activos">Activas (sin «Hoy no»)</option>'+
+      TR_ETAPAS.map(e=>'<option value="'+esc(e)+'">'+esc(e)+'</option>').join('');
+  }
+  const origenSel = document.getElementById('tf-origen');
+  const actual = origenSel.value;
+  const origenes = [...new Set(terrenos.map(t=>t.origen).filter(Boolean))].sort();
+  origenSel.innerHTML = '<option value="">Todos</option>'+origenes.map(o=>'<option value="'+esc(o)+'">'+esc(o)+'</option>').join('');
+  if(origenes.includes(actual)) origenSel.value = actual;
+}
+
+function renderTerrenos(){
+  prepararFiltrosTerrenos();
+  const body = document.getElementById('terrenos-body');
+  const empty = document.getElementById('terrenos-empty');
+  const nuevos = terrenos.filter(t=>t.etapa==='Nuevo').length;
+  document.getElementById('terrenos-badge').textContent = nuevos ? '('+nuevos+')' : '';
+  document.getElementById('terrenos-resumen').innerHTML =
+    '<div><p class="stat-label">Registrados</p><p class="stat-val">'+terrenos.length+'</p></div>'+
+    '<div><p class="stat-label">Sin revisar</p><p class="stat-val">'+nuevos+'</p></div>'+
+    '<div><p class="stat-label">Con KMZ</p><p class="stat-val">'+terrenos.filter(t=>t.tiene_kmz).length+'</p></div>';
+  body.innerHTML = '';
+
+  if(terrenosError){
+    empty.style.display='block';
+    empty.textContent = 'No se pudieron leer los terrenos ('+terrenosError+'). Revisa que ya corriste el SQL del CRM en Supabase.';
+    return;
+  }
+  const fTipo = document.getElementById('tf-tipo').value;
+  const fEtapa = document.getElementById('tf-etapa').value;
+  const fOrigen = document.getElementById('tf-origen').value;
+  const q = document.getElementById('tf-buscar').value.trim().toLowerCase();
+  const lista = terrenos.filter(t=>{
+    if(fTipo && t.tipo!==fTipo) return false;
+    if(fEtapa==='__activos' && t.etapa==='Hoy no') return false;
+    if(fEtapa && fEtapa!=='__activos' && t.etapa!==fEtapa) return false;
+    if(fOrigen && t.origen!==fOrigen) return false;
+    if(q){
+      const hay = [t.folio,t.nombre,t.municipio,t.estado,t.whatsapp].join(' ').toLowerCase();
+      if(!hay.includes(q)) return false;
+    }
+    return true;
+  });
+  if(lista.length===0){
+    empty.style.display='block';
+    empty.textContent = terrenos.length ? 'Ningún terreno coincide con estos filtros.' : 'Aún no hay terrenos registrados.';
+    return;
+  }
+  empty.style.display='none';
+
+  lista.forEach(t=>{
+    const div = document.createElement('div');
+    div.className = 'aviso-item';
+    const chipEtapa = '<span class="tr-chip'+(t.etapa==='Nuevo'?' nuevo':(t.etapa==='Aplica requerimiento'||t.etapa==='DVT solicitado'?' ok':''))+'">'+esc(t.etapa)+'</span>';
+    const linea1 = '<span class="tr-folio">'+esc(t.folio||'sin folio')+'</span>'+chipEtapa+
+      (t.en_pipeline ? '<span class="tr-chip ok">en pipeline</span>' : '');
+    const linea2 = '<span class="aviso-fecha">'+esc(trFecha(t.created_at))+' · '+esc(trLabel('tipo',t.tipo)||'sin tipo')+
+      (t.origen ? ' · origen: '+esc(t.origen) : '')+'</span>';
+    const wa = String(t.whatsapp||'').replace(/\D/g,'');
+    const waLink = wa ? '<a href="https://wa.me/52'+esc(wa)+'" target="_blank" rel="noopener" style="color:var(--moss);">WhatsApp '+esc(trTel(wa))+'</a>' : '';
+    const sup = t.superficie_ha ? Number(t.superficie_ha).toLocaleString('es-MX')+' ha' : 'superficie no indicada';
+    const base = [esc(t.municipio)+', '+esc(t.estado), sup, esc(trLabel('disponibilidad',t.disponibilidad)), esc(trLabel('regimen',t.regimen))].filter(Boolean).join(' · ');
+    const detalle = trDetalle(t).map(esc).join(' · ');
+    const kmz = t.kmz_path
+      ? '<button class="edit-link" onclick="descargarKMZ(\''+t.id+'\')">descargar KMZ</button>'
+      : '<span class="stat-sub" style="margin:0;">sin KMZ (lo enviará por WhatsApp)</span>';
+    const etapaSel = '<select onchange="updateEtapaTerreno(\''+t.id+'\', this.value)">'+
+      TR_ETAPAS.map(e=>'<option'+(e===t.etapa?' selected':'')+'>'+esc(e)+'</option>').join('')+'</select>';
+
+    div.innerHTML =
+      '<p style="margin:0 0 2px;">'+linea1+'</p>'+
+      '<p style="margin:0;">'+linea2+'</p>'+
+      '<p style="margin:6px 0 2px;"><strong>'+esc(t.nombre)+'</strong> — '+esc(trLabel('rol',t.rol))+(waLink?' · '+waLink:'')+'</p>'+
+      '<p class="stat-sub" style="margin:2px 0;">'+base+'</p>'+
+      (detalle ? '<p class="stat-sub" style="margin:2px 0;">'+detalle+'</p>' : '')+
+      '<div id="tr-notas-'+t.id+'"><p class="stat-sub" style="margin:4px 0 0;">'+(t.notas ? 'Notas: '+esc(t.notas) : '<em>Sin notas</em>')+'</p></div>'+
+      '<div class="tr-acciones">'+etapaSel+kmz+
+        '<button class="edit-link" onclick="startEditNotasTerreno(\''+t.id+'\')">'+(t.notas?'editar notas':'agregar notas')+'</button>'+
+        (t.en_pipeline ? '' : '<button class="edit-link" onclick="agregarTerrenoAPipeline(\''+t.id+'\')">agregar a pipeline</button>')+
+        '<button class="del" onclick="deleteTerreno(\''+t.id+'\')">eliminar</button>'+
+      '</div>';
+    body.appendChild(div);
+  });
+}
+
+async function updateEtapaTerreno(id, etapa){
+  const { error } = await client.from('terrenos_captados').update({ etapa }).eq('id', id);
+  if(error){ alert('No se pudo cambiar la etapa: '+error.message); }
+  await loadAll();
+  renderAll();
+}
+
+function startEditNotasTerreno(id){
+  const t = terrenos.find(x=>x.id===id);
+  const box = document.getElementById('tr-notas-'+id);
+  box.innerHTML = '<div class="coment-edit-box"><textarea id="tr-notas-edit-'+id+'" placeholder="notas internas sobre este terreno">'+esc(t.notas||'')+'</textarea>'+
+    '<button onclick="saveNotasTerreno(\''+id+'\')">Guardar</button></div>';
+}
+
+async function saveNotasTerreno(id){
+  const val = document.getElementById('tr-notas-edit-'+id).value.trim();
+  const { error } = await client.from('terrenos_captados').update({ notas: val || null }).eq('id', id);
+  if(error){ alert('No se pudieron guardar las notas: '+error.message); return; }
+  await loadAll();
+  renderAll();
+}
+
+async function descargarKMZ(id){
+  const t = terrenos.find(x=>x.id===id);
+  const ext = (t.kmz_path.split('.').pop() || 'kmz').toLowerCase();
+  const nombre = (t.folio || t.id)+'.'+ext;
+  const { data, error } = await client.storage.from('kmz-terrenos').createSignedUrl(t.kmz_path, 300, { download: nombre });
+  if(error || !data){ alert('No se pudo descargar el KMZ: '+(error ? error.message : 'sin respuesta')); return; }
+  const a = document.createElement('a');
+  a.href = data.signedUrl;
+  a.download = nombre;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
+
+async function agregarTerrenoAPipeline(id){
+  const t = terrenos.find(x=>x.id===id);
+  const sup = t.superficie_ha ? Number(t.superficie_ha).toLocaleString('es-MX')+' ha' : 'superficie no indicada';
+  const partes = [
+    'Registro de terreno '+(t.folio||''),
+    trLabel('tipo',t.tipo)+' en '+t.municipio+', '+t.estado+' · '+sup,
+    trLabel('disponibilidad',t.disponibilidad)+' · '+trLabel('regimen',t.regimen)
+  ].concat(trDetalle(t));
+  partes.push(t.tiene_kmz ? 'KMZ recibido' : 'Sin KMZ');
+  if(t.origen) partes.push('Origen: '+t.origen);
+  const nuevoContacto = {
+    created_by: userId,
+    nombre: t.nombre,
+    telefono: trTel(t.whatsapp),
+    tipo: TR_ROL_PIPELINE[t.rol] || 'Propietario',
+    canal: 'macrolote',
+    estado: 'contacto',
+    fecha: todayISO(),
+    comentarios_log: [{ texto: partes.join('. ')+'.', fecha: todayISO() }]
+  };
+  const { error } = await client.from('prospectos').insert(nuevoContacto);
+  if(error){ alert('No se pudo agregar: '+error.message); return; }
+  await client.from('terrenos_captados').update({ en_pipeline: true }).eq('id', id);
+  await loadAll();
+  renderAll();
+  alert('Agregado a tu pipeline con canal Macrolote. Puedes verlo en la pestaña Pipeline.');
+}
+
+async function deleteTerreno(id){
+  const t = terrenos.find(x=>x.id===id);
+  if(!confirm('¿Seguro que quieres eliminar el terreno '+(t.folio||'')+'? Esta acción no se puede deshacer.')) return;
+  if(t.kmz_path){ await client.storage.from('kmz-terrenos').remove([t.kmz_path]); }
+  const { error } = await client.from('terrenos_captados').delete().eq('id', id);
+  if(error){ alert('No se pudo eliminar: '+error.message); return; }
   await loadAll();
   renderAll();
 }
