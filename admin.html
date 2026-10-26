@@ -990,6 +990,18 @@ function trOfertaTipo(t){
   const sub = trProyectoSub(t);
   return base + (sub ? ' · '+sub : '');
 }
+// Precio por hectárea (en renta: por hectárea al año)
+function trPrecioUnidad(t){ return t.disponibilidad==='renta' ? ' MXN por ha al año' : ' MXN por ha'; }
+function trPrecioTotal(t){ return (t.precio_ha && t.superficie_ha) ? Number(t.precio_ha)*Number(t.superficie_ha) : null; }
+function trPrecio(t){
+  if(t.precio_ha) return fmt(t.precio_ha)+trPrecioUnidad(t);
+  if(t.precio_definido===false) return 'Precio sin definir';
+  return '';
+}
+function trPrecioTotalTxt(t){
+  const tot = trPrecioTotal(t);
+  return tot ? fmt(tot)+' MXN'+(t.disponibilidad==='renta' ? ' al año' : '') : '';
+}
 const TR_ROL_PIPELINE = { propietario:'Propietario', corredor:'Corredor independiente', asesor:'Asesor Inmobiliario' };
 
 function esc(s){
@@ -1075,6 +1087,7 @@ function renderTerrenos(){
     const waLink = wa ? '<a href="https://wa.me/52'+esc(wa)+'" target="_blank" rel="noopener" style="color:var(--moss);">WhatsApp '+esc(trTel(wa))+'</a>' : '';
     const sup = t.superficie_ha ? Number(t.superficie_ha).toLocaleString('es-MX')+' ha' : 'superficie no indicada';
     const base = [esc(t.municipio)+', '+esc(t.estado), sup, esc(trLabel('disponibilidad',t.disponibilidad)), esc(trLabel('regimen',t.regimen))].filter(Boolean).join(' · ');
+    const precioTxt = trPrecio(t) ? esc(trPrecio(t)) + (trPrecioTotalTxt(t) ? ' · total aprox. '+esc(trPrecioTotalTxt(t)) : '') : '';
     const detalle = trDetalle(t).map(esc).join(' · ');
     const kmz = t.kmz_path
       ? '<button class="edit-link" onclick="descargarKMZ(\''+t.id+'\')">descargar KMZ</button>'
@@ -1088,6 +1101,7 @@ function renderTerrenos(){
       '<p style="margin:6px 0 2px;"><strong>'+esc(t.nombre)+'</strong> — '+esc(trLabel('rol',t.rol))+(waLink?' · '+waLink:'')+'</p>'+
       '<p class="stat-sub" style="margin:2px 0;color:var(--ink);">'+esc(trOfertaTipo(t))+'</p>'+
       '<p class="stat-sub" style="margin:2px 0;">'+base+'</p>'+
+      (precioTxt ? '<p class="stat-sub" style="margin:2px 0;color:var(--brass);">'+precioTxt+'</p>' : '')+
       (detalle ? '<p class="stat-sub" style="margin:2px 0;">'+detalle+'</p>' : '')+
       '<div id="tr-notas-'+t.id+'"><p class="stat-sub" style="margin:4px 0 0;">'+(t.notas ? 'Notas: '+esc(t.notas) : '<em>Sin notas</em>')+'</p></div>'+
       '<div class="tr-acciones">'+etapaSel+
@@ -1140,6 +1154,8 @@ function fichaTerreno(t){
   fila('Uso de suelo', trLabel('uso_suelo',t.uso_suelo));
   fila('Régimen', t.regimen==='no_se' ? 'No sabe' : trLabel('regimen',t.regimen));
   fila('Disponible para', trLabel('disponibilidad',t.disponibilidad));
+  fila(t.disponibilidad==='renta' ? 'Renta por hectárea al año' : 'Precio por hectárea', t.precio_ha ? fmt(t.precio_ha)+' MXN' : (t.precio_definido===false ? 'Sin definir' : ''));
+  fila('Total aproximado', trPrecioTotalTxt(t));
   fila('KMZ', t.tiene_kmz ? 'Recibido' : 'Pendiente');
   return [
     '*Urbakasa · Registro '+(t.folio||'')+'*',
@@ -1223,6 +1239,8 @@ function descargarTerrenosExcel(){
     ['Uso de suelo', t=>trLabel('uso_suelo',t.uso_suelo)],
     ['Régimen', t=>t.regimen==='no_se' ? 'No sabe' : trLabel('regimen',t.regimen)],
     ['Disponible para', t=>trLabel('disponibilidad',t.disponibilidad)],
+    ['Precio por ha (MXN; renta: por año)', t=>t.precio_ha ? t.precio_ha : (t.precio_definido===false ? 'Sin definir' : '')],
+    ['Total aproximado (MXN)', t=>trPrecioTotal(t)],
     ['KMZ', t=>t.tiene_kmz?'Recibido':'Pendiente'],
     ['Origen', t=>t.origen],
     ['Notas', t=>t.notas]
@@ -1290,7 +1308,8 @@ async function agregarTerrenoAPipeline(id){
   const partes = [
     'Registro '+(t.folio||''),
     trOfertaTipo(t)+' en '+t.municipio+', '+t.estado+' · '+sup,
-    trLabel('disponibilidad',t.disponibilidad)+' · '+trLabel('regimen',t.regimen)
+    trLabel('disponibilidad',t.disponibilidad)+' · '+trLabel('regimen',t.regimen),
+    trPrecio(t) ? trPrecio(t)+(trPrecioTotalTxt(t) ? ' (total aprox. '+trPrecioTotalTxt(t)+')' : '') : ''
   ].filter(Boolean).concat(trDetalle(t));
   partes.push(t.tiene_kmz ? 'KMZ recibido' : 'Sin KMZ');
   if(t.origen) partes.push('Origen: '+t.origen);
