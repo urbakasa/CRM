@@ -1291,29 +1291,27 @@ function mensajeWhatsApp(t){
   const f = faltantesTerreno(t);
   const L = [];
   L.push('Hola' + (nom ? ' '+nom : '') + ', gracias por ' + (capturado ? 'compartirnos tu '+cosa : 'registrar tu '+cosa) + '.');
-  L.push('');
-  L.push(capturado ? 'Ya lo registramos con la información que nos enviaste; tu número de registro es '+t.folio+'.' : 'Tu número de registro es '+t.folio+'.');
-  L.push('');
   if(f.length){
-    L.push('Para que entre a revisión nos falta:');
+    L.push('Ya quedó registrado con el número ' + t.folio + '.');
+    L.push('');
+    L.push('Para revisarlo contra los requerimientos que tenemos activos, solo nos falta:');
     f.forEach(x=>L.push('• '+x));
     L.push('');
-    L.push('Cuando lo tengas, mándalo por aquí, en este mismo chat, y lo integramos a tu registro.');
+    L.push('Mándalo por aquí, en este mismo chat, y lo integramos a tu registro.');
     if(!t.kmz_path){
-      L.push('');
-      L.push('Si necesitas hacer el KMZ, puedes hacerlo en earth.google.com marcando el contorno del terreno, o pedirlo a quien hizo el levantamiento. La ubicación de Google Maps no nos sirve, porque no marca los límites del terreno.');
+      L.push('Si no tienes el KMZ, puedes hacerlo en earth.google.com marcando el contorno del terreno, o pedirlo a quien hizo el levantamiento. La ubicación de Google Maps no nos sirve porque no marca los límites del terreno.');
     }
   } else {
-    L.push('Tu registro está completo y entró a revisión. Lo revisamos contra los requerimientos que tenemos activos y te avisamos por aquí si aplica.');
+    L.push('Ya quedó registrado con el número ' + t.folio + ' y entró a revisión: lo revisamos contra los requerimientos que tenemos activos y te avisamos por aquí si aplica.');
   }
+  L.push('');
+  L.push('Revisa que tus datos estén correctos; si algo no coincide, avísanos por aquí:');
+  L.push('');
+  L.push(fichaTerreno(t));
   if(capturado){
     L.push('');
     L.push('Usamos tus datos solo para revisar tu '+cosa+' contra los requerimientos de nuestros clientes, conforme a nuestro aviso de privacidad: https://urbakasa.com/aviso-de-privacidad/');
   }
-  L.push('');
-  L.push('Estos son los datos de tu registro:');
-  L.push('');
-  L.push(fichaTerreno(t));
   return L.join('\n');
 }
 async function copiarFicha(id, soloFicha){
