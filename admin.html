@@ -336,11 +336,13 @@
         </select>
         <label style="margin:0;">Etapa</label>
         <select id="tf-etapa" onchange="renderTerrenos()"></select>
-        <label style="margin:0;">KMZ</label>
+        <label style="margin:0;">Archivo</label>
         <select id="tf-kmz" onchange="renderTerrenos()">
           <option value="">Todos</option>
-          <option value="pendiente">Pendiente</option>
-          <option value="recibido">Recibido</option>
+          <option value="recibido">Con archivo</option>
+          <option value="kmz">KMZ</option>
+          <option value="cuadro">Cuadro de construcción</option>
+          <option value="pendiente">En espera de archivo</option>
         </select>
         <label style="margin:0;">Origen</label>
         <select id="tf-origen" onchange="renderTerrenos()"><option value="">Todos</option></select>
@@ -1009,6 +1011,13 @@ function trPrecioTotalTxt(t){
   const tot = trPrecioTotal(t);
   return tot ? fmt(tot)+' MXN'+(t.disponibilidad==='renta' ? ' al año' : '') : '';
 }
+// Archivo de ubicación: KMZ/KML o cuadro de construcción con coordenadas UTM
+function trArchivoTipo(t){ return t.kmz_path ? (t.archivo_tipo || (t.tiene_kmz ? 'kmz' : 'cuadro')) : ''; }
+function trArchivoTxt(t){
+  const a = trArchivoTipo(t);
+  return a==='kmz' ? 'KMZ recibido' : (a==='cuadro' ? 'Cuadro de construcción recibido' : 'En espera de archivo');
+}
+const TR_EXT = { kmz:['kmz','kml'], cuadro:['pdf','jpg','jpeg','png','heic','heif','webp'] };
 const TR_ROL_PIPELINE = { propietario:'Propietario', corredor:'Corredor independiente', asesor:'Asesor Inmobiliario' };
 
 function esc(s){
@@ -1062,7 +1071,7 @@ function renderTerrenos(){
   document.getElementById('terrenos-resumen').innerHTML =
     '<div><p class="stat-label">Registrados</p><p class="stat-val">'+terrenos.length+'</p></div>'+
     '<div><p class="stat-label">Sin revisar</p><p class="stat-val">'+nuevos+'</p></div>'+
-    '<div><p class="stat-label">Con KMZ</p><p class="stat-val">'+terrenos.filter(t=>t.tiene_kmz).length+'</p></div>';
+    '<div><p class="stat-label">Con KMZ o cuadro</p><p class="stat-val">'+terrenos.filter(t=>t.kmz_path).length+'</p></div>';
   body.innerHTML = '';
 
   if(terrenosError){
@@ -1097,10 +1106,10 @@ function renderTerrenos(){
     const precioTxt = trPrecio(t) ? esc(trPrecio(t)) + (trPrecioTotalTxt(t) ? ' · total aprox. '+esc(trPrecioTotalTxt(t)) : '') : '';
     const detalle = trDetalle(t).map(esc).join(' · ');
     const kmz = t.kmz_path
-      ? '<button class="edit-link" onclick="descargarKMZ(\''+t.id+'\')">descargar KMZ</button>'+
-        '<button class="edit-link" id="tr-kmz-'+t.id+'" onclick="elegirKMZ(\''+t.id+'\')">reemplazar KMZ</button>'
-      : '<span class="tr-chip nuevo" style="margin:0;">KMZ pendiente</span>'+
-        '<button class="edit-link tr-copiar" id="tr-kmz-'+t.id+'" onclick="elegirKMZ(\''+t.id+'\')">subir KMZ</button>';
+      ? '<button class="edit-link" onclick="descargarKMZ(\''+t.id+'\')">descargar '+(trArchivoTipo(t)==='cuadro'?'cuadro':'KMZ')+'</button>'+
+        '<button class="edit-link" id="tr-kmz-'+t.id+'" onclick="elegirKMZ(\''+t.id+'\')">reemplazar archivo</button>'
+      : '<span class="tr-chip" style="margin:0;">en espera de archivo</span>'+
+        '<button class="edit-link" id="tr-kmz-'+t.id+'" onclick="elegirKMZ(\''+t.id+'\')">subir archivo</button>';
     const etapaSel = '<select onchange="updateEtapaTerreno(\''+t.id+'\', this.value)">'+
       TR_ETAPAS.map(e=>'<option'+(e===t.etapa?' selected':'')+'>'+esc(e)+'</option>').join('')+'</select>';
 
@@ -1135,6 +1144,7 @@ function terrenosFiltrados(){
     if(fOferta && (t.oferta||'terreno')!==fOferta) return false;
     if(fKmz==='pendiente' && t.kmz_path) return false;
     if(fKmz==='recibido' && !t.kmz_path) return false;
+    if((fKmz==='kmz' || fKmz==='cuadro') && trArchivoTipo(t)!==fKmz) return false;
     if(fEtapa==='__activos' && t.etapa==='Hoy no') return false;
     if(fEtapa && fEtapa!=='__activos' && t.etapa!==fEtapa) return false;
     if(fOrigen && t.origen!==fOrigen) return false;
@@ -1168,7 +1178,7 @@ function fichaTerreno(t){
   fila('Disponible para', trLabel('disponibilidad',t.disponibilidad));
   fila(t.disponibilidad==='renta' ? 'Renta por hectárea al año' : 'Precio por hectárea', t.precio_ha ? fmt(t.precio_ha)+' MXN' : (t.precio_definido===false ? 'Sin definir' : ''));
   fila('Total aproximado', trPrecioTotalTxt(t));
-  fila('KMZ', t.tiene_kmz ? 'Recibido' : 'Pendiente');
+  fila('Ubicación exacta', trArchivoTxt(t));
   return [
     '*Urbakasa · Registro '+(t.folio||'')+'*',
     'Registrado el '+fecha,
@@ -1253,7 +1263,7 @@ function descargarTerrenosExcel(){
     ['Disponible para', t=>trLabel('disponibilidad',t.disponibilidad)],
     ['Precio por ha (MXN; renta: por año)', t=>t.precio_ha ? t.precio_ha : (t.precio_definido===false ? 'Sin definir' : '')],
     ['Total aproximado (MXN)', t=>trPrecioTotal(t)],
-    ['KMZ', t=>t.tiene_kmz?'Recibido':'Pendiente'],
+    ['Ubicación exacta', t=>trArchivoTxt(t)],
     ['Origen', t=>t.origen],
     ['Notas', t=>t.notas]
   ];
@@ -1314,20 +1324,21 @@ document.getElementById('tr-kmz-input').addEventListener('change', async functio
   if(!file || !id) return;
   const t = terrenos.find(x=>x.id===id);
   const ext = (file.name.split('.').pop()||'').toLowerCase();
-  if(ext!=='kmz' && ext!=='kml'){ alert('El archivo debe ser .kmz o .kml.'); return; }
+  const tipoArch = TR_EXT.kmz.includes(ext) ? 'kmz' : (TR_EXT.cuadro.includes(ext) ? 'cuadro' : '');
+  if(!tipoArch){ alert('El archivo debe ser KMZ/KML, o el cuadro de construcción en PDF o foto.'); return; }
   if(file.size > 10*1024*1024){ alert('El archivo pesa más de 10 MB.'); return; }
   const btn = document.getElementById('tr-kmz-'+id);
   if(btn){ btn.textContent = 'subiendo…'; btn.disabled = true; }
   const path = id + '/terreno.' + ext;
-  const { error } = await client.storage.from('kmz-terrenos').upload(path, file, { upsert: true, contentType: 'application/octet-stream' });
+  const { error } = await client.storage.from('kmz-terrenos').upload(path, file, { upsert: true, contentType: file.type || 'application/octet-stream' });
   if(error){
-    alert('No se pudo subir el KMZ: '+error.message+'\n\nRevisa que ya corriste el SQL v1.9 del CRM en Supabase.');
-    if(btn){ btn.textContent = t.kmz_path ? 'reemplazar KMZ' : 'subir KMZ'; btn.disabled = false; }
+    alert('No se pudo subir el archivo: '+error.message+'\n\nRevisa que ya corriste el SQL v1.9 del CRM en Supabase.');
+    if(btn){ btn.textContent = t.kmz_path ? 'reemplazar archivo' : 'subir archivo'; btn.disabled = false; }
     return;
   }
   // si antes había un archivo con otra extensión (.kml ↔ .kmz), se borra para no dejar dos
   if(t.kmz_path && t.kmz_path !== path){ await client.storage.from('kmz-terrenos').remove([t.kmz_path]); }
-  const upd = await client.from('terrenos_captados').update({ tiene_kmz: true, kmz_path: path }).eq('id', id);
+  const upd = await client.from('terrenos_captados').update({ tiene_kmz: tipoArch==='kmz', kmz_path: path, archivo_tipo: tipoArch }).eq('id', id);
   if(upd.error){ alert('El KMZ se subió, pero no se pudo marcar en el registro: '+upd.error.message); }
   await loadAll();
   renderAll();
@@ -1336,9 +1347,9 @@ document.getElementById('tr-kmz-input').addEventListener('change', async functio
 async function descargarKMZ(id){
   const t = terrenos.find(x=>x.id===id);
   const ext = (t.kmz_path.split('.').pop() || 'kmz').toLowerCase();
-  const nombre = (t.folio || t.id)+'.'+ext;
+  const nombre = (t.folio || t.id)+(trArchivoTipo(t)==='cuadro' ? '_cuadro' : '')+'.'+ext;
   const { data, error } = await client.storage.from('kmz-terrenos').createSignedUrl(t.kmz_path, 300, { download: nombre });
-  if(error || !data){ alert('No se pudo descargar el KMZ: '+(error ? error.message : 'sin respuesta')); return; }
+  if(error || !data){ alert('No se pudo descargar el archivo: '+(error ? error.message : 'sin respuesta')); return; }
   const a = document.createElement('a');
   a.href = data.signedUrl;
   a.download = nombre;
@@ -1356,7 +1367,7 @@ async function agregarTerrenoAPipeline(id){
     trLabel('disponibilidad',t.disponibilidad)+' · '+trLabel('regimen',t.regimen),
     trPrecio(t) ? trPrecio(t)+(trPrecioTotalTxt(t) ? ' (total aprox. '+trPrecioTotalTxt(t)+')' : '') : ''
   ].filter(Boolean).concat(trDetalle(t));
-  partes.push(t.tiene_kmz ? 'KMZ recibido' : 'Sin KMZ');
+  partes.push(trArchivoTxt(t));
   if(t.origen) partes.push('Origen: '+t.origen);
   const nuevoContacto = {
     created_by: userId,
