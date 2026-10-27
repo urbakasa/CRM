@@ -316,6 +316,34 @@
     <div class="card">
       <p class="stat-sub">Terrenos y proyectos registrados en urbakasa.com/registro-terreno — separados de tu pipeline hasta que decidas darles seguimiento.</p>
       <div class="grid3" id="terrenos-resumen" style="margin-top:14px;"></div>
+      <button class="action" id="mr-toggle" onclick="toggleRegistroManual()">+ Registrar terreno recibido por WhatsApp</button>
+    </div>
+    <div class="card" id="mr-card" style="display:none;">
+      <h3>Registrar terreno recibido por <em>WhatsApp</em></h3>
+      <p class="stat-sub">Para quienes mandaron su información por WhatsApp antes de que existiera la página. Recibe folio igual que un registro web y queda marcado como capturado por Urbakasa (sin aceptación del aviso de privacidad).</p>
+      <div class="grid2">
+        <div><label>Nombre</label><input id="mr-nombre"></div>
+        <div><label>WhatsApp (10 dígitos)</label><input id="mr-wa" inputmode="numeric"></div>
+        <div><label>Ofrece el terreno como</label><select id="mr-rol"><option value="propietario">Propietario</option><option value="corredor">Corredor</option><option value="asesor">Asesor inmobiliario</option></select></div>
+        <div><label>Ofrece</label><select id="mr-oferta" onchange="mrAplicar()"><option value="terreno">Un terreno</option><option value="proyecto">Un proyecto ya estructurado</option></select></div>
+        <div><label>Tipo</label><select id="mr-tipo" onchange="mrAplicar()"><option value="agricola">Agrícola</option><option value="industrial">Industrial</option><option value="habitacional">Habitacional</option><option value="turistico">Turístico</option><option value="otro" id="mr-tipo-otro">Otro</option></select></div>
+        <div id="mr-sub-box"><label>Tipo de proyecto</label><select id="mr-sub" onchange="mrAplicar()"></select></div>
+        <div id="mr-otro-box"><label>¿Cuál?</label><input id="mr-otro" maxlength="120"></div>
+        <div><label>Estado</label><select id="mr-estado"></select></div>
+        <div><label>Municipio</label><input id="mr-mun"></div>
+        <div><label>Superficie (ha)</label><input id="mr-sup" type="number" min="0" step="0.01"></div>
+        <div id="mr-cult-box"><label>Qué se siembra hoy</label><input id="mr-cult"></div>
+        <div><label>Agua</label><select id="mr-agua"><option value="">Sin dato</option></select></div>
+        <div><label>Documentos del terreno</label><select id="mr-reg"><option value="escritura">Con escritura</option><option value="ejidal">Ejidal</option><option value="sucesion">En sucesión</option><option value="no_se">No sabe</option></select></div>
+        <div><label>Disponible para</label><select id="mr-disp"><option value="venta">Venta</option><option value="renta">Renta</option><option value="aportacion">Aportación a un proyecto</option><option value="abierto">Abierto a opciones</option></select></div>
+        <div><label>Precio por ha (MXN; renta: por año)</label><input id="mr-precio" inputmode="numeric" placeholder="vacío = sin definir"></div>
+      </div>
+      <label>KMZ o cuadro de construcción (opcional; también puedes subirlo después)</label>
+      <input type="file" id="mr-file">
+      <label>Notas</label>
+      <textarea id="mr-notas" placeholder="Ej. Llegó por WhatsApp el 24 oct; corredor con exclusiva"></textarea>
+      <button class="action" id="mr-btn" onclick="guardarRegistroManual()">Registrar y asignar folio</button>
+      <p class="stat-sub" id="mr-msg" style="margin-top:10px;"></p>
     </div>
     <div class="card">
       <div class="sort-controls">
@@ -1286,6 +1314,98 @@ function descargarFichasTxt(){
     return fichaTerreno(t)+'\n\n'+extra.join('\n');
   }).join('\n\n────────────────────\n\n');
   descargarArchivo(nombreArchivoTerrenos('txt'), '﻿'+texto, 'text/plain;charset=utf-8');
+}
+
+// ───────── Registro manual (terrenos que llegaron por WhatsApp) ─────────
+const MR_SUBS = {
+  agricola:['huerta_aguacate','huerta_berries','plantacion_agave','huerta_citricos','invernadero'],
+  industrial:['parque_industrial','nave_industrial','centro_logistico','agroindustria'],
+  habitacional:['fracc_trunco','fracc_permisos','desarrollo_vertical','lotes_urbanizados'],
+  turistico:['hotel','residencial_turistico','ecoturistico']
+};
+const MR_ESTADOS = ['Aguascalientes','Baja California','Baja California Sur','Campeche','Chiapas','Chihuahua','Ciudad de México','Coahuila','Colima','Durango','Estado de México','Guanajuato','Guerrero','Hidalgo','Jalisco','Michoacán','Morelos','Nayarit','Nuevo León','Oaxaca','Puebla','Querétaro','Quintana Roo','San Luis Potosí','Sinaloa','Sonora','Tabasco','Tamaulipas','Tlaxcala','Veracruz','Yucatán','Zacatecas'];
+let mrListo = false;
+function mrPreparar(){
+  if(mrListo) return; mrListo = true;
+  document.getElementById('mr-estado').innerHTML = MR_ESTADOS.map(e=>'<option'+(e==='Jalisco'?' selected':'')+'>'+e+'</option>').join('');
+  document.getElementById('mr-agua').innerHTML = '<option value="">Sin dato</option>' + Object.keys(TR_L.agua).map(k=>'<option value="'+k+'">'+TR_L.agua[k]+'</option>').join('');
+  mrAplicar();
+}
+function toggleRegistroManual(){
+  const card = document.getElementById('mr-card');
+  const abrir = card.style.display==='none';
+  card.style.display = abrir ? 'block' : 'none';
+  document.getElementById('mr-toggle').textContent = abrir ? 'Cerrar registro manual' : '+ Registrar terreno recibido por WhatsApp';
+  if(abrir){ mrPreparar(); document.getElementById('mr-nombre').focus(); }
+}
+function mrAplicar(){
+  const proy = document.getElementById('mr-oferta').value==='proyecto';
+  const tipoSel = document.getElementById('mr-tipo');
+  document.getElementById('mr-tipo-otro').disabled = !proy;
+  if(!proy && tipoSel.value==='otro') tipoSel.value = 'agricola';
+  const t = tipoSel.value;
+  const subSel = document.getElementById('mr-sub');
+  const prev = subSel.value;
+  const subs = proy && MR_SUBS[t] ? MR_SUBS[t] : null;
+  subSel.innerHTML = subs ? subs.map(k=>'<option value="'+k+'">'+TR_SUBS[k]+'</option>').join('')+'<option value="otro">Otro</option>' : '';
+  if(subs && [...subSel.options].some(o=>o.value===prev)) subSel.value = prev;
+  document.getElementById('mr-sub-box').style.display = subs ? 'block' : 'none';
+  document.getElementById('mr-otro-box').style.display = (proy && (t==='otro' || subSel.value==='otro')) ? 'block' : 'none';
+  document.getElementById('mr-cult-box').style.display = t==='agricola' ? 'block' : 'none';
+}
+async function guardarRegistroManual(){
+  const v = id=>document.getElementById(id).value.trim();
+  const msg = document.getElementById('mr-msg'), btn = document.getElementById('mr-btn');
+  const wa = v('mr-wa').replace(/\D/g,'').slice(-10);
+  const proy = v('mr-oferta')==='proyecto', t = v('mr-tipo');
+  const faltan = [];
+  if(v('mr-nombre').length<2) faltan.push('nombre');
+  if(wa.length!==10) faltan.push('WhatsApp de 10 dígitos');
+  if(v('mr-mun').length<2) faltan.push('municipio');
+  const otroVisible = document.getElementById('mr-otro-box').style.display!=='none';
+  if(otroVisible && v('mr-otro').length<2) faltan.push('tipo de proyecto');
+  const file = document.getElementById('mr-file').files[0];
+  let tipoArch = null, ext = '';
+  if(file){
+    ext = (file.name.split('.').pop()||'').toLowerCase();
+    tipoArch = TR_EXT.kmz.includes(ext) ? 'kmz' : (TR_EXT.cuadro.includes(ext) ? 'cuadro' : '');
+    if(!tipoArch) faltan.push('archivo válido (KMZ/KML, o cuadro en PDF o foto)');
+    else if(file.size > 10*1024*1024) faltan.push('archivo de menos de 10 MB');
+  }
+  if(faltan.length){ msg.style.color='var(--rust)'; msg.textContent = 'Falta: '+faltan.join(', ')+'.'; return; }
+
+  btn.disabled = true; btn.textContent = 'Registrando…'; msg.textContent = '';
+  const id = (crypto.randomUUID ? crypto.randomUUID() : null);
+  let path = null;
+  if(file && id){
+    path = id + '/terreno.' + ext;
+    const up = await client.storage.from('kmz-terrenos').upload(path, file, { upsert: true, contentType: file.type || 'application/octet-stream' });
+    if(up.error){ msg.style.color='var(--rust)'; msg.textContent = 'No se pudo subir el archivo: '+up.error.message; btn.disabled=false; btn.textContent='Registrar y asignar folio'; return; }
+  }
+  const precio = parseInt(v('mr-precio').replace(/\D/g,''),10);
+  const sub = proy && MR_SUBS[t] ? v('mr-sub') : null;
+  const p = {
+    id: id, nombre: v('mr-nombre'), whatsapp: wa, rol: v('mr-rol'), oferta: v('mr-oferta'), tipo: t,
+    proyecto_sub: sub, proyecto_otro: otroVisible ? v('mr-otro') : null,
+    estado: v('mr-estado'), municipio: v('mr-mun'), superficie_ha: v('mr-sup') || null,
+    cultivo: t==='agricola' ? v('mr-cult') : null, agua: v('mr-agua') || null,
+    regimen: v('mr-reg'), disponibilidad: v('mr-disp'),
+    precio_ha: precio > 0 ? precio : null, precio_definido: precio > 0,
+    archivo_tipo: path ? tipoArch : null, kmz_path: path, notas: v('mr-notas') || null, origen: 'whatsapp'
+  };
+  const { data, error } = await client.rpc('registrar_terreno_admin', { p });
+  btn.disabled = false; btn.textContent = 'Registrar y asignar folio';
+  if(error){
+    msg.style.color='var(--rust)';
+    msg.textContent = 'No se pudo registrar: '+error.message+' (revisa que ya corriste el SQL v2.1 del CRM).';
+    return;
+  }
+  ['mr-nombre','mr-wa','mr-otro','mr-mun','mr-sup','mr-cult','mr-precio','mr-notas','mr-file'].forEach(x=>document.getElementById(x).value='');
+  msg.style.color='var(--moss)';
+  msg.textContent = 'Registrado con folio '+data+'. Ya aparece en la lista: usa «copiar ficha para WhatsApp» para mandársela.';
+  await loadAll();
+  document.getElementById('tf-buscar').value = data;
+  renderAll();
 }
 
 async function updateEtapaTerreno(id, etapa){
