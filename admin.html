@@ -72,6 +72,16 @@
   .tr-acciones{margin-top:8px;display:flex;gap:12px;flex-wrap:wrap;align-items:center;}
   .tr-acciones select{width:auto;padding:3px 6px;font-size:12px;}
   .tr-acciones .edit-link{display:inline;padding:0;}
+  .mr-files{margin:8px 0 4px;}
+  .mr-file{display:flex;justify-content:space-between;gap:10px;align-items:center;font-size:12.5px;padding:6px 0;border-bottom:1px solid var(--line);}
+  .mr-file span.lect{color:var(--ink-soft);font-size:11.5px;}
+  .mr-resumen{margin-top:14px;padding:12px 14px;border:1px solid var(--line);border-left:2px solid var(--brass);background:var(--field);font-size:13px;color:var(--ink);}
+  .mr-resumen p{margin:0 0 6px;}
+  .mr-resumen .av{color:var(--rust);}
+  input.auto,select.auto{border-color:var(--brass);box-shadow:0 0 0 1px var(--brass) inset;}
+  details.conv{margin-top:4px;}
+  details.conv summary{cursor:pointer;color:var(--ink-soft);font-size:11.5px;text-decoration:underline;}
+  details.conv pre{white-space:pre-wrap;word-break:break-word;font-family:'Inter',sans-serif;font-size:12px;color:var(--ink-soft);background:var(--field);border:1px solid var(--line);padding:10px;max-height:320px;overflow:auto;}
   .tr-export{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;padding-bottom:10px;border-bottom:1px solid var(--line);}
   .tr-copiar{font-weight:600;}
   #terrenos-badge{margin-left:4px;color:var(--rust);}
@@ -321,6 +331,14 @@
     <div class="card" id="mr-card" style="display:none;">
       <h3>Registrar terreno recibido por <em>WhatsApp</em></h3>
       <p class="stat-sub">Para quienes mandaron su información por WhatsApp antes de que existiera la página. Recibe folio igual que un registro web y queda marcado como capturado por Urbakasa (sin aceptación del aviso de privacidad).</p>
+      <label>1 · Pega la conversación de WhatsApp o el texto del asesor</label>
+      <textarea id="mr-texto" style="min-height:150px" placeholder="En WhatsApp: mantén presionado un mensaje → selecciona los demás → Copiar. Pégalo aquí completo; tus propios mensajes se ignoran."></textarea>
+      <label>2 · Agrega los archivos que te mandó (KMZ, cuadro de construcción, fichas en PDF, fotos)</label>
+      <input type="file" id="mr-files" multiple onchange="mrAgregarArchivos(this)">
+      <div id="mr-files-list" class="mr-files"></div>
+      <button class="action" id="mr-leer" onclick="mrLeer()">3 · Leer y llenar automáticamente</button>
+      <div id="mr-resumen" class="mr-resumen" style="display:none;"></div>
+      <h3 style="margin-top:22px;">4 · Revisa y completa</h3>
       <div class="grid2">
         <div><label>Nombre</label><input id="mr-nombre"></div>
         <div><label>WhatsApp (10 dígitos)</label><input id="mr-wa" inputmode="numeric"></div>
@@ -338,8 +356,8 @@
         <div><label>Disponible para</label><select id="mr-disp"><option value="venta">Venta</option><option value="renta">Renta</option><option value="aportacion">Aportación a un proyecto</option><option value="abierto">Abierto a opciones</option></select></div>
         <div><label>Precio por ha (MXN; renta: por año)</label><input id="mr-precio" inputmode="numeric" placeholder="vacío = sin definir"></div>
       </div>
-      <label>KMZ o cuadro de construcción (opcional; también puedes subirlo después)</label>
-      <input type="file" id="mr-file">
+      <label>Archivo de ubicación (el que vale como KMZ o cuadro de construcción)</label>
+      <select id="mr-principal"><option value="">Ninguno por ahora</option></select>
       <label>Notas</label>
       <textarea id="mr-notas" placeholder="Ej. Llegó por WhatsApp el 24 oct; corredor con exclusiva"></textarea>
       <button class="action" id="mr-btn" onclick="guardarRegistroManual()">Registrar y asignar folio</button>
@@ -385,6 +403,7 @@
       </div>
       <div id="terrenos-body"></div>
       <input type="file" id="tr-kmz-input" style="display:none">
+      <input type="file" id="tr-adj-input" multiple style="display:none" onchange="agregarAdjuntos(this)">
       <p class="empty" id="terrenos-empty" style="display:none;">Aún no hay terrenos registrados.</p>
     </div>
   </div>
@@ -1149,9 +1168,12 @@ function renderTerrenos(){
       '<p class="stat-sub" style="margin:2px 0;">'+base+'</p>'+
       (precioTxt ? '<p class="stat-sub" style="margin:2px 0;color:var(--brass);">'+precioTxt+'</p>' : '')+
       (detalle ? '<p class="stat-sub" style="margin:2px 0;">'+detalle+'</p>' : '')+
+      ((Array.isArray(t.archivos) && t.archivos.length) ? '<p class="stat-sub" style="margin:4px 0 0;">Archivos: '+t.archivos.map((a,i)=>'<button class="edit-link" style="display:inline;padding:0;" onclick="bajarAdjunto(\''+t.id+'\','+i+')">'+esc(a.nombre)+'</button>').join(' · ')+'</p>' : '')+
+      (t.conversacion ? '<details class="conv"><summary>ver conversación de WhatsApp</summary><pre>'+esc(t.conversacion)+'</pre></details>' : '')+
       '<div id="tr-notas-'+t.id+'"><p class="stat-sub" style="margin:4px 0 0;">'+(t.notas ? 'Notas: '+esc(t.notas) : '<em>Sin notas</em>')+'</p></div>'+
       '<div class="tr-acciones">'+etapaSel+
         '<button class="edit-link tr-copiar" id="tr-copiar-'+t.id+'" onclick="copiarFicha(\''+t.id+'\')">copiar ficha para WhatsApp</button>'+kmz+
+        '<button class="edit-link" onclick="elegirAdjuntos(\''+t.id+'\')">agregar archivos</button>'+
         '<button class="edit-link" onclick="startEditNotasTerreno(\''+t.id+'\')">'+(t.notas?'editar notas':'agregar notas')+'</button>'+
         (t.en_pipeline ? '' : '<button class="edit-link" onclick="agregarTerrenoAPipeline(\''+t.id+'\')">agregar a pipeline</button>')+
         '<button class="del" onclick="deleteTerreno(\''+t.id+'\')">eliminar</button>'+
@@ -1177,7 +1199,7 @@ function terrenosFiltrados(){
     if(fEtapa && fEtapa!=='__activos' && t.etapa!==fEtapa) return false;
     if(fOrigen && t.origen!==fOrigen) return false;
     if(q){
-      const hay = [t.folio,t.nombre,t.municipio,t.estado,t.whatsapp,t.proyecto_otro].join(' ').toLowerCase();
+      const hay = [t.folio,t.nombre,t.municipio,t.estado,t.whatsapp,t.proyecto_otro,t.conversacion].join(' ').toLowerCase();
       if(!hay.includes(q)) return false;
     }
     return true;
@@ -1353,6 +1375,372 @@ function mrAplicar(){
   document.getElementById('mr-otro-box').style.display = (proy && (t==='otro' || subSel.value==='otro')) ? 'block' : 'none';
   document.getElementById('mr-cult-box').style.display = t==='agricola' ? 'block' : 'none';
 }
+// ───────── Lector de conversaciones (texto → casillas) ─────────
+// ───────── Lector de conversaciones de WhatsApp → casillas del registro ─────────
+// Heurístico: llena lo que reconoce con seguridad y deja vacío lo demás.
+const PC = (function(){
+  const sinAc = s => s.normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase();
+  const ESTADOS = [
+    ['Aguascalientes',['aguascalientes','ags']],['Baja California Sur',['baja california sur','bcs']],['Baja California',['baja california']],
+    ['Campeche',['campeche']],['Chiapas',['chiapas']],['Chihuahua',['chihuahua']],['Ciudad de México',['ciudad de mexico','cdmx']],
+    ['Coahuila',['coahuila']],['Colima',['colima']],['Durango',['durango']],['Estado de México',['estado de mexico','edomex','edo mex','edo. de mexico']],
+    ['Guanajuato',['guanajuato','gto']],['Guerrero',['guerrero']],['Hidalgo',['hidalgo']],['Jalisco',['jalisco','jal']],
+    ['Michoacán',['michoacan','mich']],['Morelos',['morelos']],['Nayarit',['nayarit','nay']],['Nuevo León',['nuevo leon']],
+    ['Oaxaca',['oaxaca']],['Puebla',['puebla']],['Querétaro',['queretaro','qro']],['Quintana Roo',['quintana roo']],
+    ['San Luis Potosí',['san luis potosi','slp']],['Sinaloa',['sinaloa']],['Sonora',['sonora']],['Tabasco',['tabasco']],
+    ['Tamaulipas',['tamaulipas']],['Tlaxcala',['tlaxcala']],['Veracruz',['veracruz']],['Yucatán',['yucatan']],['Zacatecas',['zacatecas','zac']]
+  ];
+  // Frases de nuestros propios mensajes: si un mensaje las trae, se descarta completo
+  const PROPIAS = ['no compramos terrenos','registro-terreno','criterio validado','la firma del macrolote','para atenderte mejor',
+    'coordenadas utm','te escribe el equipo de urbakasa','soy jorge cortes','dictamen de viabilidad','estos son los datos de tu registro','aviso de privacidad'];
+  const CULTIVOS = ['maiz','sorgo','agave','aguacate','berries','frambuesa','zarzamora','fresa','arandano','limon','naranja','caña','cana de azucar','trigo','frijol','chile','tomate','jitomate','garbanzo','alfalfa','mango','nogal','nuez','durazno','papa','avena','cebada','hortalizas','pasto','aguacates','cebolla','brocoli','lechuga','pepino','calabaza','cacahuate','cafe','platano','papaya','guayaba','pitaya','sandia','melon'];
+
+  // 1) Separar mensajes si viene en formato de WhatsApp ("[27/10/26, 10:15] Nombre: texto" o "27/10/26 10:15 - Nombre: texto")
+  const RE_LINEA = /^\s*\[?(\d{1,2}\/\d{1,2}\/\d{2,4})[,\s]+(\d{1,2}:\d{2}(?::\d{2})?\s*(?:[ap]\.?\s?m\.?)?)\]?\s*(?:-\s*)?([^:]{1,60}):\s?(.*)$/i;
+  function mensajes(texto){
+    const out = []; let cur = null;
+    texto.replace(/\r/g,'').split('\n').forEach(l=>{
+      const m = l.match(RE_LINEA);
+      if(m){ cur = {autor:m[3].trim(), texto:m[4]}; out.push(cur); }
+      else if(cur){ cur.texto += '\n' + l; }
+      else { cur = {autor:'', texto:l}; out.push(cur); }
+    });
+    return out;
+  }
+  function esPropio(m, propios){
+    const a = sinAc(m.autor);
+    if(a && propios.some(p=>a===p || a.startsWith(p+' '))) return true;
+    const t = sinAc(m.texto);
+    return PROPIAS.some(f=>t.includes(f));
+  }
+  // número en texto: "350,000" · "350 mil" · "1.5 millones" · "12 mdp"
+  function monto(numTxt, escala){
+    let n = numTxt.replace(/\s/g,'');
+    if(/^\d{1,3}(,\d{3})+(\.\d+)?$/.test(n)) n = n.replace(/,/g,'');
+    else if(/^\d{1,3}(\.\d{3})+$/.test(n)) n = n.replace(/\./g,'');
+    else n = n.replace(',', '.');
+    let v = parseFloat(n); if(isNaN(v)) return null;
+    const e = sinAc(escala||'');
+    if(/^(millon|millones|mdp|mm)/.test(e)) v *= 1e6; else if(/^(mil|k)\b/.test(e) || e==='mil' || e==='k') v *= 1e3;
+    return v;
+  }
+  const MENORES = ['de','del','la','las','los','el','y'];
+  function titulo(x){ return x.trim().split(/\s+/).map((w,i)=>{ const lw = w.toLowerCase(); return (i>0 && MENORES.includes(lw)) ? lw : lw.charAt(0).toUpperCase()+lw.slice(1); }).join(' '); }
+  const CULT_BONITO = {maiz:'Maíz',limon:'Limón',arandano:'Arándano',cafe:'Café',platano:'Plátano',sandia:'Sandía',melon:'Melón',brocoli:'Brócoli','caña':'Caña','cana de azucar':'Caña de azúcar'};
+  function leer(texto, opciones){
+    const propios = (opciones && opciones.propios || ['urbakasa','jorge','jorge cortes','jorge terrenos','tu','you']).map(sinAc);
+    const msgs = mensajes(texto);
+    const suyos = msgs.filter(m=>!esPropio(m, propios));
+    const limpio = suyos.map(m=>m.texto).join('\n').trim();
+    const t = sinAc(limpio);
+    const r = {}, hallados = [];
+    const set = (k,v)=>{ if(v!==null && v!==undefined && v!=='' && !(k in r)){ r[k]=v; hallados.push(k); } };
+
+    // Nombre: autor del chat (si no es un número) o "soy / me llamo / mi nombre es"
+    const autor = (suyos.find(m=>m.autor)||{}).autor || '';
+    if(autor && !/^[+\d\s()-]+$/.test(autor)) set('nombre', autor.replace(/[~‎]/g,'').trim());
+    const mn = limpio.match(/(?:[Mm]e llamo\s+|[Mm]i nombre es\s+|[Ss]oy (?:el |la )?|[Cc]ontacto:?\s*|[Aa]tentamente,?\s*)(?:(?:[Ll]ic|[Ii]ng|[Aa]rq|[Dd]r|[Ss]r|[Ss]ra)\.?\s+)?([A-ZÁÉÍÓÚÑ][a-záéíóúñ]+(?:\s+[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+){1,3})/);
+    if(mn) set('nombre', mn[1]);
+
+    // WhatsApp: autor numérico o número de 10 dígitos en el texto
+    const telTxt = (/^[+\d\s()-]+$/.test(autor) ? autor+' ' : '') + limpio;
+    const mt = telTxt.match(/(?:\+?52[\s-]?1?[\s-]?)?\(?(\d{2,3})\)?[\s.-]?(\d{3,4})[\s.-]?(\d{4})(?!\d)/);
+    if(mt){ const d = (mt[1]+mt[2]+mt[3]); if(d.length===10) set('whatsapp', d); }
+
+    // Rol
+    if(/\b(corredor|corredora|broker)\b/.test(t)) set('rol','corredor');
+    else if(/\b(asesor|asesora|inmobiliaria|agente inmobiliario)\b/.test(t)) set('rol','asesor');
+    else if(/\b(propietario|propietaria|dueno|duena|soy el dueno|es mio|es de mi familia|de mi papa|mi terreno)\b/.test(t)) set('rol','propietario');
+
+    // Superficie: hectáreas o m²
+    const mh = t.match(/(\d[\d,.]*)\s*(?:has?\b|hectareas?|hect\b|hts?\b)/);
+    const mm = t.match(/(\d[\d,.]*)\s*(?:m2|m²|mts2|mts\.?\s*cuadrados|metros cuadrados|metros2)/);
+    let ha = null;
+    if(mh) ha = monto(mh[1]); else if(mm){ const m2 = monto(mm[1]); if(m2) ha = Math.round(m2/100)/100; }
+    if(ha && ha>0 && ha<1e6) set('superficie', ha);
+
+    // Precio: por ha, por m², o total (se divide entre la superficie)
+    const NUM = '\\$?\\s*(\\d[\\d,.]*)\\s*(millones|millon|mdp|mil|k)?';
+    let mp = t.match(new RegExp(NUM+'\\s*(?:pesos\\s*)?(?:por|la|x|el|/|c/u\\s*)\\s*(?:ha\\b|has\\b|hectarea)'));
+    if(mp){ const v = monto(mp[1], mp[2]); if(v) set('precio', Math.round(v)); }
+    if(!('precio' in r)){
+      mp = t.match(new RegExp(NUM+'\\s*(?:pesos\\s*)?(?:por|el|x|/)\\s*(?:m2|m²|metro)'));
+      if(mp){ const v = monto(mp[1], mp[2]); if(v) set('precio', Math.round(v*10000)); }
+    }
+    if(!('precio' in r)){
+      for(const m of t.matchAll(new RegExp('(?:precio|vendo|vende|venden|venta|valor|pido|pide|piden|en|\\$)\\D{0,25}?'+NUM,'g'))){
+        const v = monto(m[1], m[2]);
+        if(v && v>=100000){ if(ha && v > 3000000) set('precio', Math.round(v/ha)); else set('precio', Math.round(v)); break; }
+      }
+    }
+    if(!('precio' in r)){
+      // cifra con separador de miles sin palabra clave: "2,800,000 total"
+      const mc = t.match(/\$?\s*(\d{1,3}(?:,\d{3}){2,})(?!\d)/);
+      if(mc){ const v = monto(mc[1]); if(v && v>=100000){ if(ha && v > 3000000) set('precio', Math.round(v/ha)); else set('precio', Math.round(v)); } }
+    }
+
+    // Estado y municipio
+    let estado = null, posEstado = -1, nomEstadoTxt = '';
+    for(const [nombre, claves] of ESTADOS){
+      for(const c of claves){
+        const re = new RegExp('(^|[^a-z])'+c.replace('.','\\.')+'(?![a-z])');
+        const m = t.match(re);
+        if(m){ const p = m.index + m[1].length; if(posEstado<0 || p<posEstado){ estado = nombre; posEstado = p; nomEstadoTxt = c; } break; }
+      }
+    }
+    if(estado){
+      set('estado', estado);
+      // palabra(s) justo antes del estado: "Tlajomulco, Jalisco" / "en Ameca Jal"
+      const antes = limpio.slice(0, posEstado).replace(/[,.\s]+$/,'');
+      const mm2 = antes.match(/([A-Za-zÁÉÍÓÚÑáéíóúñ][A-Za-zÁÉÍÓÚÑáéíóúñ.]*(?:\s+(?:de|del|la|las|los|el|[A-Za-zÁÉÍÓÚÑáéíóúñ][A-Za-zÁÉÍÓÚÑáéíóúñ.]*)){0,3})$/);
+      if(mm2){
+        let mun = mm2[1].trim();
+        // quitar palabras de relleno al inicio: "en", "ubicado en", "municipio de"
+        mun = mun.replace(/^(?:.*\b(?:en|municipio de|mpio\.? de|mpio\.?)\s+)/i,'');
+        const malas = ['terreno','rancho','predio','hectareas','agua','pozo','venta','renta','ubicado','ubicada','esta','tengo'];
+        if(mun.length>=3 && !malas.includes(sinAc(mun.split(' ')[0]))) set('municipio', titulo(mun));
+      }
+    }
+    if(!('municipio' in r)){
+      const mmu = limpio.match(/municipio de\s+([A-ZÁÉÍÓÚÑ][\wáéíóúñ]+(?:\s+(?:de|del|la|[A-ZÁÉÍÓÚÑ][\wáéíóúñ]+)){0,3})/i);
+      if(mmu) set('municipio', titulo(mmu[1]));
+    }
+
+    // Agua
+    r._avisos = [];
+    if((/\b(concesion|concesionad|titulo de agua|titulo de concesion|titulo de pozo|conagua)/.test(t) || /pozo[^.\n]{0,30}titulo|titulo[^.\n]{0,30}pozo/.test(t)) && !/(pozo|agua|riego)[^.\n]{0,25}(compartid|vecin)|(compartid|vecin)[^.\n]{0,25}(pozo|agua|riego)/.test(t)) set('agua','concesion_propia');
+    else if(/(pozo|agua|riego)[^.\n]{0,25}(compartid|vecin)|(compartid|vecin)[^.\n]{0,25}(pozo|agua|riego)/.test(t)) set('agua','acuerdo_vecino');
+    else if(/\b(canal|distrito de riego|modulo de riego)\b/.test(t)) set('agua','canal_riego');
+    else if(/\brio\b/.test(t)) set('agua','rio');
+    else if(/\btemporal\b/.test(t)) set('agua','temporal');
+    else if(/\b(red municipal|agua potable)\b/.test(t)) set('agua','red_municipal');
+    else if(/\b(sin agua|no tiene agua|no cuenta con agua)\b/.test(t)) set('agua','sin_agua');
+    if(!('agua' in r) && /\bpozo/.test(t)) r._avisos.push('Menciona un pozo, pero no dice si tiene concesión: confírmalo antes de elegir el agua.');
+
+    // Documentos
+    if(/\b(sucesion|intestado|herederos|testamentari|albacea)\b/.test(t)) set('regimen','sucesion');
+    else if(/\b(dominio pleno|escritura|escriturado|escriturada|pequena propiedad|propiedad privada|registro publico)\b/.test(t)) set('regimen','escritura');
+    else if(/\b(ejidal|ejido|parcela|parcelario|comunal)/.test(t)) set('regimen','ejidal');
+
+    // Disponible para
+    const venta = /\b(venta|vendo|vende|venden|vender|precio)\b/.test(t), renta = /\b(renta|rento|rentar|arrend)/.test(t);
+    if(/\b(aportacion|asociacion|socio|coinversion|aportar)\b/.test(t)) set('disponibilidad','aportacion');
+    else if(venta && renta) set('disponibilidad','abierto');
+    else if(renta) set('disponibilidad','renta');
+    else if(venta) set('disponibilidad','venta');
+
+    // Tipo y proyecto
+    const puntos = {
+      agricola:(t.match(/\b(agricola|cultiv|siembr|sembrad|riego|huerta|cosecha|parcela|temporal|maiz|agave|aguacate)/g)||[]).length,
+      industrial:(t.match(/\b(industrial|nave|bodega|logistic)/g)||[]).length,
+      habitacional:(t.match(/\b(habitacional|fraccionamiento|lotes|vivienda|residencial|departamento)/g)||[]).length,
+      turistico:(t.match(/\b(turistic|hotel|playa|costa|ecoturis|cabana)/g)||[]).length
+    };
+    const mejor = Object.keys(puntos).sort((a,b)=>puntos[b]-puntos[a])[0];
+    if(puntos[mejor]>0) set('tipo', mejor);
+    const proy = [
+      [/huerta de aguacate|aguacate en produccion|huerta.*aguacate/, 'agricola','huerta_aguacate'],
+      [/huerta de (berries|frambuesa|zarzamora|arandano|fresa)|berries en produccion/, 'agricola','huerta_berries'],
+      [/plantacion de agave|agave plantado|agave de \d/, 'agricola','plantacion_agave'],
+      [/huerta de (limon|citricos|naranja)/, 'agricola','huerta_citricos'],
+      [/invernadero|macrotunel|agricultura protegida/, 'agricola','invernadero'],
+      [/parque industrial/, 'industrial','parque_industrial'],
+      [/nave industrial/, 'industrial','nave_industrial'],
+      [/centro logistico|bodegas/, 'industrial','centro_logistico'],
+      [/empacadora|planta de empaque/, 'industrial','agroindustria'],
+      [/fraccionamiento (?:sin terminar|inconcluso|detenido|trunco|a medias)|obra detenida/, 'habitacional','fracc_trunco'],
+      [/fraccionamiento con permisos|con licencia de urbanizacion/, 'habitacional','fracc_permisos'],
+      [/lotes urbanizados/, 'habitacional','lotes_urbanizados'],
+      [/\bhotel\b/, 'turistico','hotel']
+    ];
+    for(const [re, tp, sub] of proy){ if(re.test(t)){ set('oferta','proyecto'); r.tipo = tp; if(!hallados.includes('tipo')) hallados.push('tipo'); set('sub', sub); break; } }
+
+    // Cultivo
+    const cult = CULTIVOS.filter(c=>new RegExp('\\b'+c+'\\b').test(t));
+    if(cult.length) set('cultivo', [...new Set(cult.map(c=>c==='aguacates'?'aguacate':c))].slice(0,3).map(c=>CULT_BONITO[c]||(c.charAt(0).toUpperCase()+c.slice(1))).join(', '));
+
+    const avisos = r._avisos; delete r._avisos;
+    return { campos:r, hallados:hallados, avisos:avisos, conversacion: limpio, descartados: msgs.length - suyos.length };
+  }
+  return { leer:leer };
+})();
+
+// ───────── Lector de archivos: KMZ/KML (superficie y ubicación) y PDF con texto ─────────
+const LIBS = {
+  jszip: 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js',
+  pdf: 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js',
+  pdfWorker: 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'
+};
+function cargarScript(src){
+  return new Promise((ok, mal)=>{
+    if(document.querySelector('script[src="'+src+'"]')) return ok();
+    const sc = document.createElement('script'); sc.src = src; sc.onload = ok; sc.onerror = ()=>mal(new Error('No se pudo cargar '+src));
+    document.head.appendChild(sc);
+  });
+}
+function extDe(nombre){ return (nombre.split('.').pop()||'').toLowerCase(); }
+function claseArchivo(nombre){
+  const e = extDe(nombre);
+  if(e==='kmz' || e==='kml') return 'kmz';
+  if(e==='pdf') return 'pdf';
+  if(['jpg','jpeg','png','heic','heif','webp'].includes(e)) return 'imagen';
+  return 'otro';
+}
+async function kmlTexto(file){
+  if(extDe(file.name)==='kml') return await file.text();
+  await cargarScript(LIBS.jszip);
+  const zip = await JSZip.loadAsync(file);
+  const k = Object.keys(zip.files).find(n=>n.toLowerCase().endsWith('.kml'));
+  return k ? await zip.files[k].async('text') : null;
+}
+function coordsDe(txt){
+  return txt.trim().split(/\s+/).map(p=>p.split(',').map(Number)).filter(a=>a.length>=2 && !isNaN(a[0]) && !isNaN(a[1]));
+}
+function leerKML(kml){
+  const doc = new DOMParser().parseFromString(kml, 'application/xml');
+  const tag = n => Array.from(doc.getElementsByTagNameNS('*', n));
+  let polis = [];
+  tag('Polygon').forEach(p=>{
+    const ob = Array.from(p.getElementsByTagNameNS('*','outerBoundaryIs'))[0] || p;
+    const c = Array.from(ob.getElementsByTagNameNS('*','coordinates'))[0];
+    if(c) polis.push(coordsDe(c.textContent));
+  });
+  if(!polis.length){ tag('LineString').concat(tag('LinearRing')).forEach(l=>{ const c = Array.from(l.getElementsByTagNameNS('*','coordinates'))[0]; if(c){ const pts = coordsDe(c.textContent); if(pts.length>=3) polis.push(pts); } }); }
+  polis = polis.filter(p=>p.length>=3);
+  const textos = tag('name').concat(tag('description')).map(n=>n.textContent).join('\n');
+  return { polis, textos };
+}
+// Área geodésica de un anillo [lon,lat] en m²
+function areaAnillo(pts){
+  const R = 6378137, rad = Math.PI/180; let s = 0;
+  for(let i=0;i<pts.length;i++){ const [x1,y1] = pts[i], [x2,y2] = pts[(i+1)%pts.length]; s += (x2-x1)*rad*(2+Math.sin(y1*rad)+Math.sin(y2*rad)); }
+  return Math.abs(s*R*R/2);
+}
+async function ubicarPunto(lat, lon){
+  try{
+    const r = await fetch('https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=10&accept-language=es&lat='+lat+'&lon='+lon);
+    if(!r.ok) return null;
+    const j = await r.json(), a = j.address || {};
+    let est = a.state || '';
+    const norm = x=>x.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+    if(norm(est)==='mexico') est = 'Estado de México';
+    const estado = MR_ESTADOS.find(e=>norm(e)===norm(est)) || MR_ESTADOS.find(e=>norm(est).includes(norm(e))) || '';
+    const municipio = (a.county || a.municipality || a.city || a.town || a.village || '').replace(/^Municipio de\s+/i,'');
+    return { estado, municipio };
+  }catch(e){ return null; }
+}
+async function pdfTexto(file){
+  await cargarScript(LIBS.pdf);
+  pdfjsLib.GlobalWorkerOptions.workerSrc = LIBS.pdfWorker;
+  const doc = await pdfjsLib.getDocument({ data: await file.arrayBuffer() }).promise;
+  let out = '';
+  for(let i=1; i<=Math.min(doc.numPages, 15); i++){
+    const pg = await doc.getPage(i); const tc = await pg.getTextContent();
+    out += tc.items.map(it=>it.str).join(' ') + '\n';
+  }
+  return out.trim();
+}
+
+// ───────── Registro manual: archivos, lectura y guardado ─────────
+let mrArchivos = [];   // [{file, clase, lectura}]
+function mrAgregarArchivos(inp){
+  Array.from(inp.files||[]).forEach(f=>{ if(!mrArchivos.some(a=>a.file.name===f.name && a.file.size===f.size)) mrArchivos.push({ file:f, clase:claseArchivo(f.name), lectura:'' }); });
+  inp.value = '';
+  mrPintarArchivos();
+}
+function mrQuitarArchivo(i){ mrArchivos.splice(i,1); mrPintarArchivos(); }
+function mrPintarArchivos(){
+  const box = document.getElementById('mr-files-list');
+  box.innerHTML = mrArchivos.map((a,i)=>'<div class="mr-file"><span>'+esc(a.file.name)+' <span class="lect">· '+Math.max(1,Math.round(a.file.size/1024))+' KB'+(a.lectura?' · '+esc(a.lectura):'')+(a.file.size>10*1024*1024?' · pesa más de 10 MB, no se podrá guardar':'')+'</span></span><button class="del" onclick="mrQuitarArchivo('+i+')">quitar</button></div>').join('');
+  const sel = document.getElementById('mr-principal'), prev = sel.value;
+  sel.innerHTML = '<option value="">Ninguno por ahora</option>' + mrArchivos.map((a,i)=> (a.clase==='kmz'||a.clase==='pdf'||a.clase==='imagen') ? '<option value="'+i+'">'+esc(a.file.name)+(a.clase==='kmz'?' (KMZ)':' (cuadro de construcción)')+'</option>' : '').join('');
+  if(prev!=='' && [...sel.options].some(o=>o.value===prev)) sel.value = prev;
+  else { const k = mrArchivos.findIndex(a=>a.clase==='kmz'); sel.value = k>=0 ? String(k) : ''; }
+}
+function mrMarcar(id, valor){
+  const el = document.getElementById(id); if(!el || valor===undefined || valor===null || valor==='') return false;
+  if(el.tagName==='SELECT' && ![...el.options].some(o=>o.value===String(valor))) return false;
+  el.value = valor; el.classList.add('auto');
+  el.addEventListener('input', ()=>el.classList.remove('auto'), { once:true });
+  el.addEventListener('change', ()=>el.classList.remove('auto'), { once:true });
+  return true;
+}
+async function mrLeer(){
+  mrPreparar();
+  const btn = document.getElementById('mr-leer'), res = document.getElementById('mr-resumen');
+  btn.disabled = true; btn.textContent = 'Leyendo…';
+  document.querySelectorAll('#mr-card .auto').forEach(e=>e.classList.remove('auto'));
+  const avisos = []; let extra = ''; let kmzHa = null, kmzUbic = null;
+  for(const a of mrArchivos){
+    try{
+      if(a.clase==='kmz'){
+        const kml = await kmlTexto(a.file);
+        if(!kml){ a.lectura = 'no se encontró el contorno'; continue; }
+        const { polis, textos } = leerKML(kml);
+        if(textos) extra += '\n' + textos;
+        if(polis.length){
+          const ha = polis.reduce((s,p)=>s+areaAnillo(p),0)/10000;
+          if(kmzHa===null) kmzHa = Math.round(ha*100)/100;
+          const todos = polis.flat(), lat = todos.reduce((s,p)=>s+p[1],0)/todos.length, lon = todos.reduce((s,p)=>s+p[0],0)/todos.length;
+          if(!kmzUbic) kmzUbic = await ubicarPunto(lat.toFixed(6), lon.toFixed(6));
+          a.lectura = 'contorno de '+(Math.round(ha*100)/100).toLocaleString('es-MX')+' ha'+(kmzUbic && kmzUbic.municipio ? ' en '+kmzUbic.municipio+', '+kmzUbic.estado : '');
+        } else { a.lectura = 'sin polígono (solo un punto o líneas abiertas)'; avisos.push('El archivo '+a.file.name+' no trae el contorno cerrado del terreno.'); }
+      } else if(a.clase==='pdf'){
+        const txt = await pdfTexto(a.file);
+        if(txt.length > 40){ extra += '\n' + txt; a.lectura = 'PDF leído'; }
+        else { a.lectura = 'PDF escaneado: se guarda sin leer'; }
+      } else if(a.clase==='imagen'){ a.lectura = 'foto: se guarda sin leer'; }
+      else { a.lectura = 'se guarda sin leer'; }
+    }catch(e){ a.lectura = 'no se pudo leer ('+e.message+')'; }
+  }
+  mrPintarArchivos();
+
+  const texto = document.getElementById('mr-texto').value;
+  const L = PC.leer(texto + '\n' + extra);
+  const c = L.campos, llenadas = [];
+  const etiqueta = {nombre:'nombre',whatsapp:'WhatsApp',rol:'rol',oferta:'terreno o proyecto',tipo:'tipo',estado:'estado',municipio:'municipio',superficie:'superficie',cultivo:'cultivo',agua:'agua',regimen:'documentos',disponibilidad:'disponible para',precio:'precio'};
+  const poner = (k, id, v)=>{ if(mrMarcar(id, v)) llenadas.push(etiqueta[k]); };
+  poner('nombre','mr-nombre',c.nombre); poner('whatsapp','mr-wa',c.whatsapp); poner('rol','mr-rol',c.rol);
+  poner('oferta','mr-oferta',c.oferta); poner('tipo','mr-tipo',c.tipo); mrAplicar();
+  if(c.sub) mrMarcar('mr-sub', c.sub); mrAplicar();
+  // Ubicación y superficie: el texto manda; el KMZ completa o confirma
+  const estado = c.estado || (kmzUbic && kmzUbic.estado);
+  const municipio = c.municipio || (kmzUbic && kmzUbic.municipio);
+  poner('estado','mr-estado',estado); poner('municipio','mr-mun',municipio);
+  const sup = c.superficie || kmzHa;
+  poner('superficie','mr-sup',sup);
+  if(c.superficie && kmzHa && Math.abs(c.superficie-kmzHa)/kmzHa > 0.1) avisos.push('La conversación dice '+c.superficie.toLocaleString('es-MX')+' ha, pero el contorno del KMZ mide '+kmzHa.toLocaleString('es-MX')+' ha.');
+  if(c.municipio && kmzUbic && kmzUbic.municipio && c.municipio.toLowerCase()!==kmzUbic.municipio.toLowerCase()) avisos.push('La conversación dice '+c.municipio+', pero el KMZ cae en '+kmzUbic.municipio+', '+kmzUbic.estado+'.');
+  poner('cultivo','mr-cult',c.cultivo); poner('agua','mr-agua',c.agua); poner('regimen','mr-reg',c.regimen); poner('disponibilidad','mr-disp',c.disponibilidad);
+  if(c.precio) poner('precio','mr-precio',Number(c.precio).toLocaleString('es-MX'));
+  (L.avisos||[]).forEach(x=>avisos.push(x));
+
+  const importantes = ['nombre','WhatsApp','municipio','superficie','agua','documentos','disponible para','precio'];
+  const faltan = importantes.filter(x=>!llenadas.includes(x));
+  const wa = (c.whatsapp||'').slice(-10);
+  if(wa){ const dup = terrenos.filter(t=>String(t.whatsapp||'').slice(-10)===wa); if(dup.length) avisos.push('Este WhatsApp ya tiene registro: '+dup.map(t=>t.folio).join(', ')+'. Si es otro terreno de la misma persona, regístralo de todos modos.'); }
+  res.style.display = 'block';
+  res.innerHTML =
+    '<p><strong>Llené '+llenadas.length+' casillas</strong> (marcadas en dorado)'+(L.descartados?' · ignoré '+L.descartados+' mensaje(s) tuyos':'')+'.</p>'+
+    (faltan.length ? '<p>No encontré: '+esc(faltan.join(', '))+'. Complétalas si el chat lo dice de otra forma.</p>' : '<p>Encontré todos los datos principales.</p>')+
+    avisos.map(x=>'<p class="av">⚠ '+esc(x)+'</p>').join('')+
+    '<p>Revisa antes de registrar: la lectura es automática y puede equivocarse.</p>';
+  btn.disabled = false; btn.textContent = '3 · Leer y llenar automáticamente';
+}
+function nombreSeguro(n){ return n.normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^\w.-]+/g,'_').slice(-80); }
+async function subirAdjuntos(id, lista){
+  const out = [];
+  for(let i=0;i<lista.length;i++){
+    const f = lista[i];
+    if(f.size > 10*1024*1024) throw new Error(f.name+' pesa más de 10 MB');
+    const path = id + '/archivos/' + Date.now() + '-' + (i+1) + '-' + nombreSeguro(f.name);
+    const up = await client.storage.from('kmz-terrenos').upload(path, f, { upsert: true, contentType: f.type || 'application/octet-stream' });
+    if(up.error) throw new Error(f.name+': '+up.error.message);
+    out.push({ nombre: f.name, path, tipo: claseArchivo(f.name), kb: Math.max(1, Math.round(f.size/1024)) });
+  }
+  return out;
+}
+
 async function guardarRegistroManual(){
   const v = id=>document.getElementById(id).value.trim();
   const msg = document.getElementById('mr-msg'), btn = document.getElementById('mr-btn');
@@ -1364,24 +1752,16 @@ async function guardarRegistroManual(){
   if(v('mr-mun').length<2) faltan.push('municipio');
   const otroVisible = document.getElementById('mr-otro-box').style.display!=='none';
   if(otroVisible && v('mr-otro').length<2) faltan.push('tipo de proyecto');
-  const file = document.getElementById('mr-file').files[0];
-  let tipoArch = null, ext = '';
-  if(file){
-    ext = (file.name.split('.').pop()||'').toLowerCase();
-    tipoArch = TR_EXT.kmz.includes(ext) ? 'kmz' : (TR_EXT.cuadro.includes(ext) ? 'cuadro' : '');
-    if(!tipoArch) faltan.push('archivo válido (KMZ/KML, o cuadro en PDF o foto)');
-    else if(file.size > 10*1024*1024) faltan.push('archivo de menos de 10 MB');
-  }
+  if(mrArchivos.some(a=>a.file.size > 10*1024*1024)) faltan.push('quitar los archivos de más de 10 MB');
   if(faltan.length){ msg.style.color='var(--rust)'; msg.textContent = 'Falta: '+faltan.join(', ')+'.'; return; }
 
   btn.disabled = true; btn.textContent = 'Registrando…'; msg.textContent = '';
-  const id = (crypto.randomUUID ? crypto.randomUUID() : null);
-  let path = null;
-  if(file && id){
-    path = id + '/terreno.' + ext;
-    const up = await client.storage.from('kmz-terrenos').upload(path, file, { upsert: true, contentType: file.type || 'application/octet-stream' });
-    if(up.error){ msg.style.color='var(--rust)'; msg.textContent = 'No se pudo subir el archivo: '+up.error.message; btn.disabled=false; btn.textContent='Registrar y asignar folio'; return; }
-  }
+  const id = crypto.randomUUID();
+  let adjuntos = [];
+  try{ adjuntos = await subirAdjuntos(id, mrArchivos.map(a=>a.file)); }
+  catch(e){ msg.style.color='var(--rust)'; msg.textContent = 'No se pudo subir un archivo: '+e.message; btn.disabled=false; btn.textContent='Registrar y asignar folio'; return; }
+  const pIdx = v('mr-principal');
+  const principal = pIdx!=='' ? adjuntos[Number(pIdx)] : null;
   const precio = parseInt(v('mr-precio').replace(/\D/g,''),10);
   const sub = proy && MR_SUBS[t] ? v('mr-sub') : null;
   const p = {
@@ -1391,21 +1771,54 @@ async function guardarRegistroManual(){
     cultivo: t==='agricola' ? v('mr-cult') : null, agua: v('mr-agua') || null,
     regimen: v('mr-reg'), disponibilidad: v('mr-disp'),
     precio_ha: precio > 0 ? precio : null, precio_definido: precio > 0,
-    archivo_tipo: path ? tipoArch : null, kmz_path: path, notas: v('mr-notas') || null, origen: 'whatsapp'
+    archivo_tipo: principal ? (principal.tipo==='kmz' ? 'kmz' : 'cuadro') : null, kmz_path: principal ? principal.path : null,
+    archivos: adjuntos, conversacion: document.getElementById('mr-texto').value.trim() || null,
+    notas: v('mr-notas') || null, origen: 'whatsapp'
   };
   const { data, error } = await client.rpc('registrar_terreno_admin', { p });
   btn.disabled = false; btn.textContent = 'Registrar y asignar folio';
   if(error){
     msg.style.color='var(--rust)';
-    msg.textContent = 'No se pudo registrar: '+error.message+' (revisa que ya corriste el SQL v2.1 del CRM).';
+    msg.textContent = 'No se pudo registrar: '+error.message+' (revisa que ya corriste el SQL v2.2 del CRM).';
     return;
   }
-  ['mr-nombre','mr-wa','mr-otro','mr-mun','mr-sup','mr-cult','mr-precio','mr-notas','mr-file'].forEach(x=>document.getElementById(x).value='');
+  ['mr-texto','mr-nombre','mr-wa','mr-otro','mr-mun','mr-sup','mr-cult','mr-precio','mr-notas'].forEach(x=>document.getElementById(x).value='');
+  document.querySelectorAll('#mr-card .auto').forEach(e=>e.classList.remove('auto'));
+  mrArchivos = []; mrPintarArchivos(); document.getElementById('mr-resumen').style.display='none';
   msg.style.color='var(--moss)';
   msg.textContent = 'Registrado con folio '+data+'. Ya aparece en la lista: usa «copiar ficha para WhatsApp» para mandársela.';
   await loadAll();
   document.getElementById('tf-buscar').value = data;
   renderAll();
+}
+
+// ───────── Adjuntos en registros existentes ─────────
+let adjDestino = null;
+function elegirAdjuntos(id){ adjDestino = id; const inp = document.getElementById('tr-adj-input'); inp.value=''; inp.click(); }
+async function agregarAdjuntos(inp){
+  const id = adjDestino, files = Array.from(inp.files||[]);
+  if(!id || !files.length) return;
+  const t = terrenos.find(x=>x.id===id);
+  let nuevos = [];
+  try{ nuevos = await subirAdjuntos(id, files); }
+  catch(e){ alert('No se pudo subir: '+e.message); return; }
+  const cambios = { archivos: (Array.isArray(t.archivos)?t.archivos:[]).concat(nuevos) };
+  if(!t.kmz_path){
+    const k = nuevos.find(a=>a.tipo==='kmz');
+    const c = !k && nuevos.find(a=>a.tipo==='pdf' || a.tipo==='imagen');
+    if(k){ cambios.kmz_path = k.path; cambios.archivo_tipo = 'kmz'; cambios.tiene_kmz = true; }
+    else if(c && confirm('¿'+c.nombre+' es el cuadro de construcción con coordenadas UTM?')){ cambios.kmz_path = c.path; cambios.archivo_tipo = 'cuadro'; cambios.tiene_kmz = false; }
+  }
+  const { error } = await client.from('terrenos_captados').update(cambios).eq('id', id);
+  if(error){ alert('Los archivos se subieron, pero no se pudieron ligar al registro: '+error.message); }
+  await loadAll(); renderAll();
+}
+async function bajarAdjunto(id, i){
+  const t = terrenos.find(x=>x.id===id), a = (t.archivos||[])[i];
+  if(!a) return;
+  const { data, error } = await client.storage.from('kmz-terrenos').createSignedUrl(a.path, 300, { download: (t.folio||'')+'_'+a.nombre });
+  if(error || !data){ alert('No se pudo descargar: '+(error?error.message:'sin respuesta')); return; }
+  const el = document.createElement('a'); el.href = data.signedUrl; el.download = a.nombre; document.body.appendChild(el); el.click(); el.remove();
 }
 
 async function updateEtapaTerreno(id, etapa){
@@ -1510,7 +1923,8 @@ async function agregarTerrenoAPipeline(id){
 async function deleteTerreno(id){
   const t = terrenos.find(x=>x.id===id);
   if(!confirm('¿Seguro que quieres eliminar el terreno '+(t.folio||'')+'? Esta acción no se puede deshacer.')) return;
-  if(t.kmz_path){ await client.storage.from('kmz-terrenos').remove([t.kmz_path]); }
+  const rutas = [t.kmz_path].concat((Array.isArray(t.archivos)?t.archivos:[]).map(x=>x.path)).filter(Boolean);
+  if(rutas.length){ await client.storage.from('kmz-terrenos').remove([...new Set(rutas)]); }
   const { error } = await client.from('terrenos_captados').delete().eq('id', id);
   if(error){ alert('No se pudo eliminar: '+error.message); return; }
   await loadAll();
