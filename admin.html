@@ -335,13 +335,15 @@
       <button class="action" id="mr-toggle" onclick="toggleRegistroManual()">+ Registrar terreno recibido por WhatsApp</button>
     </div>
     <div class="card" id="mr-card" style="display:none;">
-      <h3>Registrar terreno recibido por <em>WhatsApp</em></h3>
-      <p class="stat-sub">Para quienes mandaron su información por WhatsApp antes de que existiera la página. Recibe folio igual que un registro web y queda marcado como capturado por Urbakasa (sin aceptación del aviso de privacidad).</p>
-      <label>1 · Pega la conversación de WhatsApp o el texto del asesor</label>
+      <h3 id="mr-titulo">Registrar terreno recibido por <em>WhatsApp</em></h3>
+      <p class="stat-sub" id="mr-intro">Para quienes mandaron su información por WhatsApp antes de que existiera la página. Recibe folio igual que un registro web y queda marcado como capturado por Urbakasa (sin aceptación del aviso de privacidad).</p>
+      <label id="mr-texto-label">1 · Pega la conversación de WhatsApp o el texto del asesor</label>
       <textarea id="mr-texto" style="min-height:150px" placeholder="En WhatsApp: mantén presionado un mensaje → selecciona los demás → Copiar. Pégalo aquí completo; tus propios mensajes se ignoran."></textarea>
+      <div id="mr-archivos-box">
       <label>2 · Agrega los archivos que te mandó (KMZ, cuadro de construcción, fichas en PDF, fotos)</label>
       <input type="file" id="mr-files" multiple onchange="mrAgregarArchivos(this)">
       <div id="mr-files-list" class="mr-files"></div>
+      </div>
       <button class="action" id="mr-leer" onclick="mrLeer()">3 · Leer y llenar automáticamente</button>
       <div id="mr-resumen" class="mr-resumen" style="display:none;"></div>
       <h3 style="margin-top:22px;">4 · Revisa y completa</h3>
@@ -362,11 +364,14 @@
         <div><label>Disponible para</label><select id="mr-disp"><option value="venta">Venta</option><option value="renta">Renta</option><option value="aportacion">Aportación a un proyecto</option><option value="abierto">Abierto a opciones</option></select></div>
         <div><label>Precio por ha (MXN; renta: por año)</label><input id="mr-precio" inputmode="numeric" placeholder="vacío = sin definir"></div>
       </div>
+      <div id="mr-alta-box">
       <label>Archivo de ubicación (el que vale como KMZ o cuadro de construcción)</label>
       <select id="mr-principal"><option value="">Ninguno por ahora</option></select>
       <label>Notas</label>
       <textarea id="mr-notas" placeholder="Ej. Llegó por WhatsApp el 24 oct; corredor con exclusiva"></textarea>
+      </div>
       <button class="action" id="mr-btn" onclick="guardarRegistroManual()">Registrar y asignar folio</button>
+      <button class="sort-dir-btn" id="mr-cancelar" style="display:none;margin-left:8px;" onclick="cancelarEdicion()">Cancelar</button>
       <p class="stat-sub" id="mr-msg" style="margin-top:10px;"></p>
     </div>
     <div class="card">
@@ -1189,6 +1194,8 @@ function renderTerrenos(){
         '<button class="edit-link" id="tr-ficha-'+t.id+'" onclick="copiarFicha(\''+t.id+'\', true)">solo ficha</button>'+
         (trArchivoTipo(t)==='kmz' ? '<button class="edit-link tr-copiar" onclick="verMapa(\''+t.id+'\')">ver en mapa</button>' : '')+
         (trArchivoTipo(t)==='cuadro' ? '<button class="edit-link tr-copiar" onclick="verCuadro(\''+t.id+'\')">ver cuadro</button>' : '')+kmz+
+        '<button class="edit-link" onclick="editarTerreno(\''+t.id+'\')">editar datos</button>'+
+        '<button class="edit-link tr-copiar" id="tr-todo-'+t.id+'" onclick="descargarTodo(\''+t.id+'\')">descargar todo</button>'+
         '<button class="edit-link" onclick="elegirAdjuntos(\''+t.id+'\')">agregar archivos</button>'+
         '<button class="edit-link" onclick="startEditNotasTerreno(\''+t.id+'\')">'+(t.notas?'editar notas':'agregar notas')+'</button>'+
         (t.en_pipeline ? '' : '<button class="edit-link" onclick="agregarTerrenoAPipeline(\''+t.id+'\')">agregar a pipeline</button>')+
@@ -1413,8 +1420,84 @@ function mrPreparar(){
   document.getElementById('mr-agua').innerHTML = '<option value="">Sin dato</option>' + Object.keys(TR_L.agua).map(k=>'<option value="'+k+'">'+TR_L.agua[k]+'</option>').join('');
   mrAplicar();
 }
+let mrEditId = null;
+function modoEdicion(t){
+  mrEditId = t ? t.id : null;
+  const ed = !!t;
+  document.getElementById('mr-titulo').innerHTML = ed ? 'Editar datos del registro <em>'+esc(t.folio||'')+'</em>' : 'Registrar terreno recibido por <em>WhatsApp</em>';
+  document.getElementById('mr-intro').textContent = ed
+    ? 'Corrige o completa las casillas. Si llegó información nueva por WhatsApp, pégala abajo y usa «Leer y llenar»: se agrega a la conversación guardada. Las notas y los archivos se manejan desde la lista.'
+    : 'Para quienes mandaron su información por WhatsApp antes de que existiera la página. Recibe folio igual que un registro web y queda marcado como capturado por Urbakasa (sin aceptación del aviso de privacidad).';
+  document.getElementById('mr-texto-label').textContent = ed ? 'Información nueva de WhatsApp (opcional)' : '1 · Pega la conversación de WhatsApp o el texto del asesor';
+  document.getElementById('mr-archivos-box').style.display = ed ? 'none' : 'block';
+  document.getElementById('mr-alta-box').style.display = ed ? 'none' : 'block';
+  document.getElementById('mr-btn').textContent = ed ? 'Guardar cambios' : 'Registrar y asignar folio';
+  document.getElementById('mr-cancelar').style.display = ed ? 'inline-block' : 'none';
+  document.getElementById('mr-resumen').style.display = 'none';
+  document.getElementById('mr-msg').textContent = '';
+}
+function editarTerreno(id){
+  const t = terrenos.find(x=>x.id===id); if(!t) return;
+  mrPreparar(); modoEdicion(t);
+  document.getElementById('mr-card').style.display = 'block';
+  document.getElementById('mr-toggle').textContent = 'Cerrar';
+  const set = (i,v)=>{ const el = document.getElementById(i); el.value = (v===null||v===undefined) ? '' : v; el.classList.remove('auto'); };
+  set('mr-texto',''); set('mr-nombre',t.nombre); set('mr-wa',t.whatsapp); set('mr-rol',t.rol);
+  set('mr-oferta',t.oferta||'terreno'); set('mr-tipo',t.tipo||'agricola'); mrAplicar();
+  if(t.proyecto_sub) set('mr-sub',t.proyecto_sub); mrAplicar(); set('mr-otro',t.proyecto_otro);
+  if(t.estado && !MR_ESTADOS.includes(t.estado)){ const o = document.createElement('option'); o.textContent = t.estado; document.getElementById('mr-estado').appendChild(o); }
+  set('mr-estado',t.estado); set('mr-mun',t.municipio); set('mr-sup',t.superficie_ha); set('mr-cult',t.cultivo);
+  set('mr-agua',t.agua||''); set('mr-reg',t.regimen||'no_se'); set('mr-disp',t.disponibilidad||'venta');
+  set('mr-precio', t.precio_ha ? Number(t.precio_ha).toLocaleString('es-MX') : '');
+  document.getElementById('mr-card').scrollIntoView({ behavior:'smooth', block:'start' });
+}
+function cancelarEdicion(){
+  modoEdicion(null);
+  document.getElementById('mr-card').style.display = 'none';
+  document.getElementById('mr-toggle').textContent = '+ Registrar terreno recibido por WhatsApp';
+}
+async function guardarEdicion(){
+  const v = id=>document.getElementById(id).value.trim();
+  const msg = document.getElementById('mr-msg'), btn = document.getElementById('mr-btn');
+  const t = terrenos.find(x=>x.id===mrEditId); if(!t) return;
+  const wa = v('mr-wa').replace(/\D/g,'').slice(-10);
+  const proy = v('mr-oferta')==='proyecto', tp = v('mr-tipo');
+  const otroVisible = document.getElementById('mr-otro-box').style.display!=='none';
+  const faltan = [];
+  if(v('mr-nombre').length<2) faltan.push('nombre');
+  if(wa.length!==10) faltan.push('WhatsApp de 10 dígitos');
+  if(v('mr-mun').length<2) faltan.push('municipio');
+  if(otroVisible && v('mr-otro').length<2) faltan.push('tipo de proyecto');
+  if(faltan.length){ msg.style.color='var(--rust)'; msg.textContent = 'Falta: '+faltan.join(', ')+'.'; return; }
+  const precio = parseInt(v('mr-precio').replace(/\D/g,''),10);
+  const cambios = {
+    nombre: v('mr-nombre'), whatsapp: wa, rol: v('mr-rol'), oferta: v('mr-oferta'), tipo: tp,
+    proyecto_sub: proy && MR_SUBS[tp] ? v('mr-sub') : null, proyecto_otro: otroVisible ? v('mr-otro') : null,
+    estado: v('mr-estado'), municipio: v('mr-mun'), superficie_ha: v('mr-sup') || null,
+    cultivo: tp==='agricola' ? (v('mr-cult') || null) : null, agua: v('mr-agua') || null,
+    regimen: v('mr-reg'), disponibilidad: v('mr-disp'),
+    precio_ha: precio > 0 ? precio : null,
+    precio_definido: precio > 0 ? true : (t.precio_definido===false ? false : null)
+  };
+  const nuevo = v('mr-texto');
+  if(nuevo){
+    const sello = new Date().toLocaleString('es-MX',{ timeZone:'America/Mexico_City', dateStyle:'medium', timeStyle:'short' });
+    cambios.conversacion = (t.conversacion ? t.conversacion + '\n\n' : '') + '── Agregado el ' + sello + ' ──\n' + nuevo;
+  }
+  btn.disabled = true; btn.textContent = 'Guardando…';
+  const { error } = await client.from('terrenos_captados').update(cambios).eq('id', mrEditId);
+  btn.disabled = false; btn.textContent = 'Guardar cambios';
+  if(error){ msg.style.color='var(--rust)'; msg.textContent = 'No se pudieron guardar los cambios: '+error.message; return; }
+  const folio = t.folio;
+  cancelarEdicion();
+  await loadAll();
+  document.getElementById('tf-buscar').value = folio;
+  renderAll();
+}
+
 function toggleRegistroManual(){
   const card = document.getElementById('mr-card');
+  if(mrEditId){ cancelarEdicion(); return; }
   const abrir = card.style.display==='none';
   card.style.display = abrir ? 'block' : 'none';
   document.getElementById('mr-toggle').textContent = abrir ? 'Cerrar registro manual' : '+ Registrar terreno recibido por WhatsApp';
@@ -1785,7 +1868,7 @@ async function mrLeer(){
   const importantes = ['nombre','WhatsApp','municipio','superficie','agua','documentos','disponible para','precio'];
   const faltan = importantes.filter(x=>!llenadas.includes(x));
   const wa = (c.whatsapp||'').slice(-10);
-  if(wa){ const dup = terrenos.filter(t=>String(t.whatsapp||'').slice(-10)===wa); if(dup.length) avisos.push('Este WhatsApp ya tiene registro: '+dup.map(t=>t.folio).join(', ')+'. Si es otro terreno de la misma persona, regístralo de todos modos.'); }
+  if(wa){ const dup = terrenos.filter(t=>t.id!==mrEditId && String(t.whatsapp||'').slice(-10)===wa); if(dup.length) avisos.push('Este WhatsApp ya tiene registro: '+dup.map(t=>t.folio).join(', ')+'. Si es otro terreno de la misma persona, regístralo de todos modos.'); }
   res.style.display = 'block';
   res.innerHTML =
     '<p><strong>Llené '+llenadas.length+' casillas</strong> (marcadas en dorado)'+(L.descartados?' · ignoré '+L.descartados+' mensaje(s) tuyos':'')+'.</p>'+
@@ -1809,6 +1892,7 @@ async function subirAdjuntos(id, lista){
 }
 
 async function guardarRegistroManual(){
+  if(mrEditId) return guardarEdicion();
   const v = id=>document.getElementById(id).value.trim();
   const msg = document.getElementById('mr-msg'), btn = document.getElementById('mr-btn');
   const wa = v('mr-wa').replace(/\D/g,'').slice(-10);
@@ -1925,6 +2009,70 @@ async function verCuadro(id){
   const { data, error } = await client.storage.from('kmz-terrenos').createSignedUrl(t.kmz_path, 300);
   if(error || !data){ alert('No se pudo abrir el cuadro: '+(error?error.message:'sin respuesta')); return; }
   window.open(data.signedUrl, '_blank', 'noopener');
+}
+
+// ───────── Descargar todo de un terreno: datos, seguimiento, conversación y archivos ─────────
+function informacionCompleta(t){
+  const L = [];
+  L.push(fichaTerreno(t).replace(/\*/g,''));
+  L.push('');
+  L.push('SEGUIMIENTO INTERNO');
+  L.push('Etapa: ' + (t.etapa||'') + (t.en_pipeline ? ' · en pipeline' : ''));
+  L.push('Origen: ' + (t.origen||'web') + (t.aviso_version==='captura-whatsapp' ? ' · capturado por Urbakasa con información enviada por WhatsApp' : ' · registrado por el contacto en la página'));
+  L.push('Fecha de registro: ' + new Date(t.created_at).toLocaleString('es-MX',{ timeZone:'America/Mexico_City' }));
+  const falt = faltantesTerreno(t);
+  L.push('Pendiente para revisión: ' + (falt.length ? falt.join(' ') : 'nada, registro completo'));
+  L.push('');
+  L.push('NOTAS');
+  L.push(t.notas ? t.notas : '(sin notas)');
+  const arch = (Array.isArray(t.archivos) ? t.archivos : []).map(a=>a.nombre);
+  if(t.kmz_path && !arch.length) arch.push(t.kmz_path.split('/').pop());
+  L.push('');
+  L.push('ARCHIVOS');
+  L.push(arch.length ? arch.map(n=>'· '+n).join('\n') : '(sin archivos)');
+  if(t.conversacion){
+    L.push('');
+    L.push('CONVERSACIÓN DE WHATSAPP');
+    L.push(t.conversacion);
+  }
+  return L.join('\n');
+}
+async function descargarTodo(id){
+  const t = terrenos.find(x=>x.id===id);
+  const btn = document.getElementById('tr-todo-'+id), antes = btn ? btn.textContent : '';
+  const base = (t.folio || t.id);
+  const texto = '\uFEFF' + informacionCompleta(t);
+  // archivos: el principal y los adjuntos (sin repetir)
+  const lista = [];
+  const vistos = new Set();
+  (Array.isArray(t.archivos) ? t.archivos : []).forEach(a=>{ if(!vistos.has(a.path)){ vistos.add(a.path); lista.push({ path:a.path, nombre:a.nombre }); } });
+  if(t.kmz_path && !vistos.has(t.kmz_path)) lista.push({ path:t.kmz_path, nombre: base+(trArchivoTipo(t)==='cuadro'?'_cuadro':'')+'.'+extDe(t.kmz_path) });
+  if(!lista.length){ descargarArchivo(base+'_informacion.txt', texto, 'text/plain;charset=utf-8'); return; }
+  try{
+    if(btn){ btn.textContent = 'preparando…'; btn.disabled = true; }
+    await cargarScript(LIBS.jszip);
+    const zip = new JSZip();
+    zip.file(base+'_informacion.txt', texto);
+    const fallas = [];
+    for(const a of lista){
+      const { data, error } = await client.storage.from('kmz-terrenos').createSignedUrl(a.path, 300);
+      if(error || !data){ fallas.push(a.nombre); continue; }
+      const r = await fetch(data.signedUrl);
+      if(!r.ok){ fallas.push(a.nombre); continue; }
+      zip.file('archivos/' + nombreSeguro(a.nombre), await r.blob());
+    }
+    if(fallas.length) zip.file('NO_SE_PUDIERON_DESCARGAR.txt', fallas.join('\n'));
+    const blob = await zip.generateAsync({ type:'blob' });
+    const url = URL.createObjectURL(blob);
+    const el = document.createElement('a'); el.href = url; el.download = base + '.zip';
+    document.body.appendChild(el); el.click(); el.remove();
+    setTimeout(()=>URL.revokeObjectURL(url), 2000);
+  }catch(e){
+    alert('No se pudo armar el ZIP ('+e.message+'). Se descargará solo la información en texto.');
+    descargarArchivo(base+'_informacion.txt', texto, 'text/plain;charset=utf-8');
+  }finally{
+    if(btn){ btn.textContent = antes; btn.disabled = false; }
+  }
 }
 
 async function bajarAdjunto(id, i){
