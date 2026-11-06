@@ -88,6 +88,8 @@
   #mapa-div{height:min(68vh,640px);width:100%;background:#000;}
   .mapa-info{padding:12px 16px;font-size:13px;display:flex;gap:16px;flex-wrap:wrap;align-items:center;}
   .mapa-info a{color:var(--brass);}
+  .check-crm{display:flex;gap:8px;align-items:flex-start;font-size:13px;margin-top:12px;color:var(--ink);}
+  .check-crm input{width:auto;margin-top:3px;}
   .tr-export{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;padding-bottom:10px;border-bottom:1px solid var(--line);}
   .tr-copiar{font-weight:600;}
   #terrenos-badge{margin-left:4px;color:var(--rust);}
@@ -364,6 +366,20 @@
         <div><label>Disponible para</label><select id="mr-disp"><option value="venta">Venta</option><option value="renta">Renta</option><option value="aportacion">Aportación a un proyecto</option><option value="abierto">Abierto a opciones</option></select></div>
         <div><label>Precio por ha (MXN; renta: por año)</label><input id="mr-precio" inputmode="numeric" placeholder="vacío = sin definir"></div>
       </div>
+      <h3 style="margin-top:18px;">Condiciones con Urbakasa</h3>
+      <div class="grid2">
+        <div><label>Esquema</label><select id="mr-esquema" onchange="mrCondiciones()">
+          <option value="">Pendiente</option>
+          <option value="precio_neto">Propietario · sobreprecio</option>
+          <option value="comision">Propietario · % de comisión</option>
+          <option value="compartir">Corredor · % de comisión compartida</option>
+          <option value="sobreprecio">Corredor · sobreprecio</option>
+        </select></div>
+        <div id="mr-com-box"><label>Comisión para Urbakasa (% sobre precio de venta, más IVA)</label><input id="mr-com" inputmode="decimal"></div>
+        <div id="mr-pac-box"><label>Comisión pactada del corredor (%)</label><input id="mr-pac" inputmode="decimal"></div>
+        <div id="mr-rep-box"><label>Parte para Urbakasa (% de su comisión)</label><input id="mr-rep" inputmode="decimal" placeholder="50 = mitad y mitad"></div>
+      </div>
+      <label class="check-crm"><input type="checkbox" id="mr-aut"> El contacto autorizó presentar el terreno a clientes y en la Selección de Activos</label>
       <div id="mr-alta-box">
       <label>Archivo de ubicación (el que vale como KMZ o cuadro de construcción)</label>
       <select id="mr-principal"><option value="">Ninguno por ahora</option></select>
@@ -400,6 +416,12 @@
           <option value="kmz">KMZ</option>
           <option value="cuadro">Cuadro de construcción</option>
           <option value="pendiente">Falta KMZ o cuadro</option>
+        </select>
+        <label style="margin:0;">Condiciones</label>
+        <select id="tf-cond" onchange="renderTerrenos()">
+          <option value="">Todas</option>
+          <option value="ok">Definidas y autorizado</option>
+          <option value="pend">Pendientes</option>
         </select>
         <label style="margin:0;">Origen</label>
         <select id="tf-origen" onchange="renderTerrenos()"><option value="">Todos</option></select>
@@ -1185,6 +1207,8 @@ function renderTerrenos(){
       '<p class="stat-sub" style="margin:2px 0;color:var(--ink);">'+esc(trOfertaTipo(t))+'</p>'+
       '<p class="stat-sub" style="margin:2px 0;">'+base+'</p>'+
       (precioTxt ? '<p class="stat-sub" style="margin:2px 0;color:var(--brass);">'+precioTxt+'</p>' : '')+
+      '<p class="stat-sub" style="margin:2px 0;">'+(t.esquema ? 'Condiciones: '+esc(trCondiciones(t)) : '<span style="color:var(--rust)">Condiciones con Urbakasa pendientes</span>')+
+        ' · '+(t.autoriza_presentacion ? 'autorizó presentarlo' : '<span style="color:var(--rust)">sin autorización de presentación</span>')+'</p>'+
       (detalle ? '<p class="stat-sub" style="margin:2px 0;">'+detalle+'</p>' : '')+
       ((Array.isArray(t.archivos) && t.archivos.length) ? '<p class="stat-sub" style="margin:4px 0 0;">Archivos: '+t.archivos.map((a,i)=>'<button class="edit-link" style="display:inline;padding:0;" onclick="bajarAdjunto(\''+t.id+'\','+i+')">'+esc(a.nombre)+'</button>').join(' · ')+'</p>' : '')+
       (t.conversacion ? '<details class="conv"><summary>ver conversación de WhatsApp</summary><pre>'+esc(t.conversacion)+'</pre></details>' : '')+
@@ -1209,6 +1233,7 @@ function terrenosFiltrados(){
   const fTipo = document.getElementById('tf-tipo').value;
   const fOferta = document.getElementById('tf-oferta').value;
   const fKmz = document.getElementById('tf-kmz').value;
+  const fCond = document.getElementById('tf-cond').value;
   const fEtapa = document.getElementById('tf-etapa').value;
   const fOrigen = document.getElementById('tf-origen').value;
   const q = document.getElementById('tf-buscar').value.trim().toLowerCase();
@@ -1218,6 +1243,8 @@ function terrenosFiltrados(){
     if(fKmz==='pendiente' && t.kmz_path) return false;
     if(fKmz==='recibido' && !t.kmz_path) return false;
     if((fKmz==='kmz' || fKmz==='cuadro') && trArchivoTipo(t)!==fKmz) return false;
+    if(fCond==='ok' && !condicionesCompletas(t)) return false;
+    if(fCond==='pend' && condicionesCompletas(t)) return false;
     if(fEtapa==='__activos' && t.etapa==='Hoy no') return false;
     if(fEtapa && fEtapa!=='__activos' && t.etapa!==fEtapa) return false;
     if(fOrigen && t.origen!==fOrigen) return false;
@@ -1249,9 +1276,14 @@ function fichaTerreno(t){
   fila('Uso de suelo', trLabel('uso_suelo',t.uso_suelo));
   fila('Situación legal', t.regimen==='no_se' ? 'No sabe' : trLabel('regimen',t.regimen));
   fila('Disponible para', trLabel('disponibilidad',t.disponibilidad));
-  fila(t.disponibilidad==='renta' ? 'Renta por hectárea al año' : 'Precio por hectárea', t.precio_ha ? fmt(t.precio_ha)+' MXN' : (t.precio_definido===false ? 'Sin definir' : ''));
+  const etqPrecio = t.esquema==='precio_neto' ? (t.disponibilidad==='renta' ? 'Renta por hectárea al año, antes de impuestos' : 'Precio por hectárea, antes de impuestos')
+    : t.esquema==='sobreprecio' ? (t.disponibilidad==='renta' ? 'Renta por hectárea al año del lado vendedor, antes de impuestos del propietario' : 'Precio por hectárea del lado vendedor, antes de impuestos del propietario')
+    : (t.disponibilidad==='renta' ? 'Renta por hectárea al año' : 'Precio por hectárea');
+  fila(etqPrecio, t.precio_ha ? fmt(t.precio_ha)+' MXN' : (t.precio_definido===false ? 'Sin definir' : ''));
   fila('Total aproximado', trPrecioTotalTxt(t));
   fila('KMZ o cuadro de construcción', trArchivoTxt(t));
+  fila('Condiciones con Urbakasa', trCondiciones(t) || 'Pendientes');
+  fila('Autorización para presentarlo', t.autoriza_presentacion ? 'Sí, a clientes y en la Selección de Activos' : 'Pendiente');
   return [
     '*Urbakasa · Registro '+(t.folio||'')+'*',
     'Registrado el '+fecha,
@@ -1278,6 +1310,24 @@ async function copiarTexto(texto){
   }
 }
 
+// ───────── Condiciones con Urbakasa ─────────
+function pctTxt(n){ return Number(n).toLocaleString('es-MX', { maximumFractionDigits: 2 }) + '%'; }
+function trCondiciones(t){
+  if(t.esquema==='precio_neto') return 'Sobreprecio: la diferencia entre el precio del propietario (antes de sus impuestos) y el precio de venta es para Urbakasa, con factura';
+  if(t.esquema==='comision') return '% de comisión: ' + (t.comision_pct ? pctTxt(t.comision_pct) : '—') + ' sobre el precio de venta, más IVA';
+  if(t.esquema==='compartir') return 'Comisión pactada con el propietario: ' + (t.comision_pactada_pct ? pctTxt(t.comision_pactada_pct) : '—') + ' · se comparte con Urbakasa ' + (Number(t.reparto_pct)===50 ? 'mitad y mitad (50/50)' : (t.reparto_pct ? pctTxt(t.reparto_pct) + ' de esa comisión' : '—')) + ', más IVA';
+  if(t.esquema==='sobreprecio') return 'Sobreprecio: la diferencia entre el precio del lado vendedor (antes de impuestos del propietario) y el precio de venta es para Urbakasa, con factura · comisión pactada con el propietario: ' + (t.comision_pactada_pct ? pctTxt(t.comision_pactada_pct) : '—');
+  return '';
+}
+function trCondCorto(t){
+  if(t.esquema==='precio_neto') return 'Sobreprecio';
+  if(t.esquema==='comision') return 'Comisión ' + (t.comision_pct ? pctTxt(t.comision_pct) : '');
+  if(t.esquema==='compartir') return 'Comparte ' + (Number(t.reparto_pct)===50 ? '50/50' : (t.reparto_pct ? pctTxt(t.reparto_pct) : '')) + ' de ' + (t.comision_pactada_pct ? pctTxt(t.comision_pactada_pct) : '');
+  if(t.esquema==='sobreprecio') return 'Sobreprecio · pactada ' + (t.comision_pactada_pct ? pctTxt(t.comision_pactada_pct) : '');
+  return '';
+}
+function condicionesCompletas(t){ return !!t.esquema && !!t.autoriza_presentacion; }
+
 // Lo que le falta al registro para entrar a revisión
 function faltantesTerreno(t){
   const f = [];
@@ -1286,6 +1336,17 @@ function faltantesTerreno(t){
   if(!t.precio_ha && t.precio_definido!==false) f.push(t.disponibilidad==='renta' ? 'La renta por hectárea al año.' : 'El precio por hectárea.');
   if(!t.agua && ['agricola','industrial','turistico'].includes(t.tipo)) f.push('De dónde obtiene el agua (pozo con concesión, acuerdo con un vecino, canal, río o temporal).');
   if(t.regimen==='no_se') f.push('La situación legal del terreno: con escritura, ejidal o en sucesión.');
+  const asesor = t.rol==='corredor' || t.rol==='asesor';
+  if(!t.esquema){
+    f.push(asesor
+      ? 'Tu forma de pago a Urbakasa: % de comisión (la comisión que tienes pactada con el propietario y cuánto compartes con Urbakasa, por ejemplo mitad y mitad, más IVA) o sobreprecio (el precio por hectárea de tu lado, antes de los impuestos del propietario; la diferencia con el precio de venta es para Urbakasa).'
+      : 'Tu forma de pago a Urbakasa: sobreprecio (el precio por hectárea que quieres recibir, antes de tus impuestos; la diferencia con el precio de venta es para Urbakasa) o % de comisión sobre el precio de venta, más IVA.');
+  }
+  if(!t.autoriza_presentacion){
+    f.push(asesor
+      ? 'Tu confirmación de que tienes autorización del propietario para ofrecer el terreno, y tu autorización para presentarlo a nuestros clientes y en nuestra Selección de Activos (urbakasa.com/activos), sin publicar datos de contacto ni la ubicación exacta.'
+      : 'Tu autorización para presentar el terreno a nuestros clientes y en nuestra Selección de Activos (urbakasa.com/activos), sin publicar tus datos de contacto ni la ubicación exacta.');
+  }
   return f;
 }
 function primerNombre(n){
@@ -1380,6 +1441,11 @@ function descargarTerrenosExcel(){
     ['Disponible para', t=>trLabel('disponibilidad',t.disponibilidad)],
     ['Precio por ha (MXN; renta: por año)', t=>t.precio_ha ? t.precio_ha : (t.precio_definido===false ? 'Sin definir' : '')],
     ['Total aproximado (MXN)', t=>trPrecioTotal(t)],
+    ['Esquema con Urbakasa', t=>trCondCorto(t) || 'Pendiente'],
+    ['Comisión del propietario (%)', t=>t.comision_pct],
+    ['Comisión pactada del corredor (%)', t=>t.comision_pactada_pct],
+    ['Parte para Urbakasa (% de la comisión)', t=>t.reparto_pct],
+    ['Autorizó presentación', t=>t.autoriza_presentacion ? 'Sí' : 'No'],
     ['KMZ o cuadro de construcción', t=>trArchivoTxt(t)],
     ['Origen', t=>t.origen],
     ['Notas', t=>t.notas]
@@ -1416,6 +1482,7 @@ const MR_ESTADOS = ['Aguascalientes','Baja California','Baja California Sur','Ca
 let mrListo = false;
 function mrPreparar(){
   if(mrListo) return; mrListo = true;
+  setTimeout(mrCondiciones, 0);
   document.getElementById('mr-estado').innerHTML = MR_ESTADOS.map(e=>'<option'+(e==='Jalisco'?' selected':'')+'>'+e+'</option>').join('');
   document.getElementById('mr-agua').innerHTML = '<option value="">Sin dato</option>' + Object.keys(TR_L.agua).map(k=>'<option value="'+k+'">'+TR_L.agua[k]+'</option>').join('');
   mrAplicar();
@@ -1449,6 +1516,8 @@ function editarTerreno(id){
   set('mr-estado',t.estado); set('mr-mun',t.municipio); set('mr-sup',t.superficie_ha); set('mr-cult',t.cultivo);
   set('mr-agua',t.agua||''); set('mr-reg',t.regimen||'no_se'); set('mr-disp',t.disponibilidad||'venta');
   set('mr-precio', t.precio_ha ? Number(t.precio_ha).toLocaleString('es-MX') : '');
+  set('mr-esquema', t.esquema||''); set('mr-com', t.comision_pct); set('mr-pac', t.comision_pactada_pct); set('mr-rep', t.reparto_pct);
+  document.getElementById('mr-aut').checked = !!t.autoriza_presentacion; mrCondiciones();
   document.getElementById('mr-card').scrollIntoView({ behavior:'smooth', block:'start' });
 }
 function cancelarEdicion(){
@@ -1479,6 +1548,8 @@ async function guardarEdicion(){
     precio_ha: precio > 0 ? precio : null,
     precio_definido: precio > 0 ? true : (t.precio_definido===false ? false : null)
   };
+  Object.assign(cambios, mrCondValores());
+  if(cambios.autoriza_presentacion && !t.autoriza_presentacion) cambios.autorizacion_version = 'whatsapp';
   const nuevo = v('mr-texto');
   if(nuevo){
     const sello = new Date().toLocaleString('es-MX',{ timeZone:'America/Mexico_City', dateStyle:'medium', timeStyle:'short' });
@@ -1502,6 +1573,24 @@ function toggleRegistroManual(){
   card.style.display = abrir ? 'block' : 'none';
   document.getElementById('mr-toggle').textContent = abrir ? 'Cerrar registro manual' : '+ Registrar terreno recibido por WhatsApp';
   if(abrir){ mrPreparar(); document.getElementById('mr-nombre').focus(); }
+}
+function mrCondiciones(){
+  const e = document.getElementById('mr-esquema').value;
+  document.getElementById('mr-com-box').style.display = e==='comision' ? 'block' : 'none';
+  document.getElementById('mr-pac-box').style.display = (e==='compartir' || e==='sobreprecio') ? 'block' : 'none';
+  document.getElementById('mr-rep-box').style.display = e==='compartir' ? 'block' : 'none';
+  if(e==='compartir' && !document.getElementById('mr-rep').value) document.getElementById('mr-rep').value = '50';
+}
+function mrPct(id){ const n = parseFloat(String(document.getElementById(id).value||'').replace(',', '.').replace(/[^\d.]/g,'')); return isNaN(n) || n<=0 ? null : Math.min(n,100); }
+function mrCondValores(){
+  const e = document.getElementById('mr-esquema').value || null;
+  return {
+    esquema: e,
+    comision_pct: e==='comision' ? mrPct('mr-com') : null,
+    comision_pactada_pct: (e==='compartir' || e==='sobreprecio') ? mrPct('mr-pac') : null,
+    reparto_pct: e==='compartir' ? mrPct('mr-rep') : null,
+    autoriza_presentacion: document.getElementById('mr-aut').checked
+  };
 }
 function mrAplicar(){
   const proy = document.getElementById('mr-oferta').value==='proyecto';
@@ -1709,6 +1798,11 @@ const PC = (function(){
     const cult = CULTIVOS.filter(c=>new RegExp('\\b'+c+'\\b').test(t));
     if(cult.length) set('cultivo', [...new Set(cult.map(c=>c==='aguacates'?'aguacate':c))].slice(0,3).map(c=>CULT_BONITO[c]||(c.charAt(0).toUpperCase()+c.slice(1))).join(', '));
 
+    // Condiciones: comisión, reparto y precio neto
+    const mc = t.match(/comision[^%\n]{0,40}?(\d{1,2}(?:[.,]\d+)?)\s*%|(\d{1,2}(?:[.,]\d+)?)\s*%[^.\n]{0,25}comision/);
+    if(mc){ const v = parseFloat((mc[1]||mc[2]).replace(',','.')); if(v>0 && v<=30) set('comision', v); }
+    if(/\b50\s*\/\s*50\b|mitad y mitad|a medias|al 50/.test(t)) set('reparto', 50);
+    if(/precio neto|neto (?:para el|al) (?:dueno|propietario)|libre para (?:el )?(?:dueno|propietario)|sobreprecio|sobre precio/.test(t)) set('neto', true);
     const avisos = r._avisos; delete r._avisos;
     return { campos:r, hallados:hallados, avisos:avisos, conversacion: limpio, descartados: msgs.length - suyos.length };
   }
@@ -1864,6 +1958,20 @@ async function mrLeer(){
   poner('cultivo','mr-cult',c.cultivo); poner('agua','mr-agua',c.agua); poner('regimen','mr-reg',c.regimen); poner('disponibilidad','mr-disp',c.disponibilidad);
   if(c.precio) poner('precio','mr-precio',Number(c.precio).toLocaleString('es-MX'));
   (L.avisos||[]).forEach(x=>avisos.push(x));
+  // Condiciones detectadas en la conversación
+  const rolL = c.rol || document.getElementById('mr-rol').value;
+  const asesorL = rolL==='corredor' || rolL==='asesor';
+  if(asesorL){
+    if(c.neto){ mrMarcar('mr-esquema','sobreprecio'); }
+    else if(c.reparto || c.comision){ mrMarcar('mr-esquema','compartir'); }
+    if(c.comision) mrMarcar('mr-pac', c.comision);
+    if(c.reparto) mrMarcar('mr-rep', c.reparto);
+  } else {
+    if(c.neto) mrMarcar('mr-esquema','precio_neto');
+    else if(c.comision){ mrMarcar('mr-esquema','comision'); mrMarcar('mr-com', c.comision); }
+  }
+  mrCondiciones();
+  if(c.comision || c.reparto || c.neto) llenadas.push('condiciones');
 
   const importantes = ['nombre','WhatsApp','municipio','superficie','agua','documentos','disponible para','precio'];
   const faltan = importantes.filter(x=>!llenadas.includes(x));
@@ -1926,6 +2034,7 @@ async function guardarRegistroManual(){
     archivos: adjuntos, conversacion: document.getElementById('mr-texto').value.trim() || null,
     notas: v('mr-notas') || null, origen: 'whatsapp'
   };
+  Object.assign(p, mrCondValores());
   const { data, error } = await client.rpc('registrar_terreno_admin', { p });
   btn.disabled = false; btn.textContent = 'Registrar y asignar folio';
   if(error){
@@ -1933,7 +2042,8 @@ async function guardarRegistroManual(){
     msg.textContent = 'No se pudo registrar: '+error.message+' (revisa que ya corriste el SQL v2.2 del CRM).';
     return;
   }
-  ['mr-texto','mr-nombre','mr-wa','mr-otro','mr-mun','mr-sup','mr-cult','mr-precio','mr-notas'].forEach(x=>document.getElementById(x).value='');
+  ['mr-texto','mr-nombre','mr-wa','mr-otro','mr-mun','mr-sup','mr-cult','mr-precio','mr-notas','mr-esquema','mr-com','mr-pac','mr-rep'].forEach(x=>document.getElementById(x).value='');
+  document.getElementById('mr-aut').checked = false; mrCondiciones();
   document.querySelectorAll('#mr-card .auto').forEach(e=>e.classList.remove('auto'));
   mrArchivos = []; mrPintarArchivos(); document.getElementById('mr-resumen').style.display='none';
   msg.style.color='var(--moss)';
