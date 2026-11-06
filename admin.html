@@ -377,7 +377,7 @@
         </select></div>
         <div id="mr-com-box"><label>Comisión para Urbakasa (% sobre precio de venta, más IVA)</label><input id="mr-com" inputmode="decimal"></div>
         <div id="mr-pac-box"><label>Comisión pactada del corredor (%)</label><input id="mr-pac" inputmode="decimal"></div>
-        <div id="mr-rep-box"><label>Parte para Urbakasa (% de su comisión)</label><input id="mr-rep" inputmode="decimal" placeholder="50 = mitad y mitad"></div>
+        <div id="mr-rep-box"><label>Parte para Urbakasa (% de la comisión)</label><input id="mr-rep" inputmode="decimal" placeholder="50 = mitad y mitad"></div>
       </div>
       <label class="check-crm"><input type="checkbox" id="mr-aut"> El contacto autorizó presentar el terreno a clientes y en la Selección de Activos</label>
       <div id="mr-alta-box">
@@ -1339,7 +1339,7 @@ function faltantesTerreno(t){
   const asesor = t.rol==='corredor' || t.rol==='asesor';
   if(!t.esquema){
     f.push(asesor
-      ? 'Tu forma de pago a Urbakasa: % de comisión (la comisión que tienes pactada con el propietario y cuánto compartes con Urbakasa, por ejemplo mitad y mitad, más IVA) o sobreprecio (el precio por hectárea de tu lado, antes de los impuestos del propietario; la diferencia con el precio de venta es para Urbakasa).'
+      ? 'Tu forma de pago a Urbakasa: % de comisión (la comisión que tienes pactada con el propietario y su reparto con Urbakasa, normalmente mitad y mitad, más IVA) o sobreprecio (el precio por hectárea de tu lado, antes de los impuestos del propietario; la diferencia con el precio de venta es para Urbakasa).'
       : 'Tu forma de pago a Urbakasa: sobreprecio (el precio por hectárea que quieres recibir, antes de tus impuestos; la diferencia con el precio de venta es para Urbakasa) o % de comisión sobre el precio de venta, más IVA.');
   }
   if(!t.autoriza_presentacion){
