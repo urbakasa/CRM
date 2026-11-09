@@ -433,7 +433,7 @@
           <button class="sort-dir-btn" onclick="descargarTerrenosExcel()">Descargar Excel (CSV)</button>
           <button class="sort-dir-btn" onclick="descargarFichasTxt()">Descargar fichas (TXT)</button>
           <button class="sort-dir-btn" onclick="calcularVocacionFiltrados(this)">Calcular datos de vocación (los que faltan)</button>
-          <button class="sort-dir-btn" onclick="descargarInventarioTxt()">TXT para inventario (dato destacado)</button>
+          <button class="sort-dir-btn" onclick="descargarInventarioTxt()">TXT para inventario (todo)</button>
         </span>
       </div>
       <div id="terrenos-body"></div>
@@ -1222,7 +1222,7 @@ function renderTerrenos(){
         (trArchivoTipo(t)==='kmz' ? '<button class="edit-link tr-copiar" onclick="verMapa(\''+t.id+'\')">ver en mapa</button>' : '')+
         (trArchivoTipo(t)==='cuadro' ? '<button class="edit-link tr-copiar" onclick="verCuadro(\''+t.id+'\')">ver cuadro</button>' : '')+kmz+
         (trArchivoTipo(t)==='kmz' ? '<button class="edit-link tr-copiar" id="tr-voc-'+t.id+'" onclick="calcularVocacionTerreno(\''+t.id+'\')">'+(t.datos_vocacion ? 'recalcular datos de vocación' : 'calcular datos de vocación')+'</button>' : '')+
-        (vocTextoInventario(t) ? '<button class="edit-link" id="tr-inv-'+t.id+'" onclick="copiarInventario(\''+t.id+'\')">copiar para inventario</button>' : '')+
+        '<button class="edit-link" id="tr-inv-'+t.id+'" onclick="copiarInventario(\''+t.id+'\')">copiar para inventario</button>'+
         '<button class="edit-link" onclick="editarTerreno(\''+t.id+'\')">editar datos</button>'+
         '<button class="edit-link tr-copiar" id="tr-todo-'+t.id+'" onclick="descargarTodo(\''+t.id+'\')">descargar todo</button>'+
         '<button class="edit-link" onclick="elegirAdjuntos(\''+t.id+'\')">agregar archivos</button>'+
@@ -2481,22 +2481,26 @@ function vocTarjetaHTML(t){
   return '<p class="stat-sub" style="margin:4px 0 0;color:var(--brass);">Vocación · '+(dest || 'sin dato destacado')+'</p>'+
     '<details class="conv"><summary>ver datos por vocación (calculados el '+esc(vocFecha(dv.calculado_el))+')</summary><pre>'+filas+'</pre></details>';
 }
+// TXT para el inventario: folio, datos destacados por vocación y, abajo, toda la información del terreno
+// (ficha con contacto, condiciones y autorización; seguimiento, datos por vocación, notas, archivos y conversación)
 function vocTextoInventario(t){
-  const dv = t.datos_vocacion; if(!dv || !dv.destacados) return '';
-  const dest = Object.entries(dv.destacados);
-  if(!dest.length) return '';
-  return ['Folio '+(t.folio||'')].concat(dest.map(([v,txt])=>VOC_NOMBRES[v]+': '+txt)).join('\n');
+  const dest = Object.entries((t.datos_vocacion && t.datos_vocacion.destacados) || {});
+  const L = ['Folio '+(t.folio||'')];
+  if(dest.length) dest.forEach(([v,txt])=>L.push(VOC_NOMBRES[v]+': '+txt));
+  else L.push('Datos por vocación: sin calcular');
+  L.push('');
+  L.push(informacionCompleta(t));
+  return L.join('\n');
 }
 async function copiarInventario(id){
   const t = terrenos.find(x=>x.id===id), txt = vocTextoInventario(t);
-  if(!txt){ alert('Este terreno aún no tiene dato destacado.'); return; }
   const btn = document.getElementById('tr-inv-'+id), ok = await copiarTexto(txt);
   if(btn){ const a = btn.textContent; btn.textContent = ok ? '¡copiado!' : 'no se pudo copiar'; setTimeout(()=>btn.textContent=a, 1600); }
 }
 function descargarInventarioTxt(){
-  const lista = terrenosFiltrados().filter(t=>vocTextoInventario(t));
-  if(!lista.length){ alert('Ningún terreno de esta lista tiene datos de vocación calculados.'); return; }
-  descargarArchivo(nombreArchivoTerrenos('txt').replace(/^terrenos/,'inventario_vocacion'), '﻿'+lista.map(vocTextoInventario).join('\n\n')+'\n', 'text/plain;charset=utf-8');
+  const lista = terrenosFiltrados();
+  if(!lista.length){ alert('No hay terrenos con estos filtros.'); return; }
+  descargarArchivo(nombreArchivoTerrenos('txt').replace(/^terrenos/,'inventario'), '\uFEFF'+lista.map(vocTextoInventario).join('\n\n==========\n\n')+'\n', 'text/plain;charset=utf-8');
 }
 
 // ───────── Descargar todo de un terreno: datos, seguimiento, conversación y archivos ─────────
