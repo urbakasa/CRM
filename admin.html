@@ -2288,7 +2288,11 @@ async function geoTile(capa, x, y){
     geoTiles[id] = (async()=>{
       const r = await fetch(GEO_BASE+capa+'/'+k+(capa==='dem'?'.bin':'.json'));
       if(!r.ok) return null;
-      if(capa==='dem') return new Int16Array(await r.arrayBuffer());
+      if(capa==='dem'){
+        const buf = await r.arrayBuffer(), c = (meta.capas||{}).dem || {};
+        if(c.formato==='u8x25'){ const u = new Uint8Array(buf), out = new Int16Array(u.length); for(let i=0;i<u.length;i++) out[i] = u[i]===255 ? -32768 : u[i]*25; return out; }
+        return new Int16Array(buf);
+      }
       return await r.json();
     })();
   }

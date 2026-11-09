@@ -1102,7 +1102,7 @@
   "dem": {
    "geom": "raster",
    "fuente": "INEGI, Continuo de Elevaciones Mexicano",
-   "edicion": "CEM 4.0 (2025), reducido a 6″",
+   "edicion": "CEM 4.0 (2025), reducido a 6″ y a tramos de 25 m",
    "procesado": "2026-11-09",
    "tiles": [
     "-100_16",
@@ -1366,7 +1366,8 @@
     "-99_25",
     "-99_26"
    ],
-   "celdas": 600
+   "celdas": 600,
+   "formato": "u8x25"
   },
   "loc": {
    "geom": "poligono",
