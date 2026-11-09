@@ -432,6 +432,8 @@
         <span style="display:flex;gap:8px;flex-wrap:wrap;">
           <button class="sort-dir-btn" onclick="descargarTerrenosExcel()">Descargar Excel (CSV)</button>
           <button class="sort-dir-btn" onclick="descargarFichasTxt()">Descargar fichas (TXT)</button>
+          <button class="sort-dir-btn" onclick="calcularVocacionFiltrados(this)">Calcular datos de vocación (los que faltan)</button>
+          <button class="sort-dir-btn" onclick="descargarInventarioTxt()">TXT para inventario (dato destacado)</button>
         </span>
       </div>
       <div id="terrenos-body"></div>
@@ -1210,6 +1212,7 @@ function renderTerrenos(){
       '<p class="stat-sub" style="margin:2px 0;">'+(t.esquema ? 'Condiciones: '+esc(trCondiciones(t)) : '<span style="color:var(--rust)">Condiciones con Urbakasa pendientes</span>')+
         ' · '+(t.autoriza_presentacion ? 'autorizó presentarlo' : '<span style="color:var(--rust)">sin autorización de presentación</span>')+'</p>'+
       (detalle ? '<p class="stat-sub" style="margin:2px 0;">'+detalle+'</p>' : '')+
+      vocTarjetaHTML(t)+
       ((Array.isArray(t.archivos) && t.archivos.length) ? '<p class="stat-sub" style="margin:4px 0 0;">Archivos: '+t.archivos.map((a,i)=>'<button class="edit-link" style="display:inline;padding:0;" onclick="bajarAdjunto(\''+t.id+'\','+i+')">'+esc(a.nombre)+'</button>').join(' · ')+'</p>' : '')+
       (t.conversacion ? '<details class="conv"><summary>ver conversación de WhatsApp</summary><pre>'+esc(t.conversacion)+'</pre></details>' : '')+
       '<div id="tr-notas-'+t.id+'"><p class="stat-sub" style="margin:4px 0 0;">'+(t.notas ? 'Notas: '+esc(t.notas) : '<em>Sin notas</em>')+'</p></div>'+
@@ -1218,6 +1221,8 @@ function renderTerrenos(){
         '<button class="edit-link" id="tr-ficha-'+t.id+'" onclick="copiarFicha(\''+t.id+'\', true)">solo ficha</button>'+
         (trArchivoTipo(t)==='kmz' ? '<button class="edit-link tr-copiar" onclick="verMapa(\''+t.id+'\')">ver en mapa</button>' : '')+
         (trArchivoTipo(t)==='cuadro' ? '<button class="edit-link tr-copiar" onclick="verCuadro(\''+t.id+'\')">ver cuadro</button>' : '')+kmz+
+        (trArchivoTipo(t)==='kmz' ? '<button class="edit-link tr-copiar" id="tr-voc-'+t.id+'" onclick="calcularVocacionTerreno(\''+t.id+'\')">'+(t.datos_vocacion ? 'recalcular datos de vocación' : 'calcular datos de vocación')+'</button>' : '')+
+        (vocTextoInventario(t) ? '<button class="edit-link" id="tr-inv-'+t.id+'" onclick="copiarInventario(\''+t.id+'\')">copiar para inventario</button>' : '')+
         '<button class="edit-link" onclick="editarTerreno(\''+t.id+'\')">editar datos</button>'+
         '<button class="edit-link tr-copiar" id="tr-todo-'+t.id+'" onclick="descargarTodo(\''+t.id+'\')">descargar todo</button>'+
         '<button class="edit-link" onclick="elegirAdjuntos(\''+t.id+'\')">agregar archivos</button>'+
@@ -1447,6 +1452,7 @@ function descargarTerrenosExcel(){
     ['Parte para Urbakasa (% de la comisión)', t=>t.reparto_pct],
     ['Autorizó presentación', t=>t.autoriza_presentacion ? 'Sí' : 'No'],
     ['KMZ o cuadro de construcción', t=>trArchivoTxt(t)],
+    ['Datos por vocación (destacados)', t=>Object.entries((t.datos_vocacion&&t.datos_vocacion.destacados)||{}).map(([v,x])=>VOC_NOMBRES[v]+': '+x).join(' · ')],
     ['Origen', t=>t.origen],
     ['Notas', t=>t.notas]
   ];
@@ -2121,6 +2127,378 @@ async function verCuadro(id){
   window.open(data.signedUrl, '_blank', 'noopener');
 }
 
+// ───────── Datos por vocación (INEGI y SECTUR) ─────────
+// Se calculan en el navegador con los geodatos de la carpeta geodatos/ (cuadros de 1°, ver preparar_geodatos.py).
+// Habitacional e industrial: mancha urbana, escuela, clínica u hospital, centro comercial y parque industrial.
+// Agrícola: altitud media, clima, empacadora/acopio/bodega y río o cuerpo de agua. Turístico: costa, lago o presa y Pueblo Mágico.
+// No se calculan tipo de suelo ni distrito de riego.
+const GEO_BASE = 'geodatos/';
+const GEO_Q = 100000;
+const VOC_NOTA_AGUA = 'Referencia geográfica; no indica derecho de uso del agua';
+const VOC_NOMBRES = { habitacional:'Habitacional', industrial:'Industrial', agricola:'Agrícola', turistico:'Turístico' };
+let geoMetaCache = null;
+const geoTiles = {};
+
+async function geoMeta(){
+  if(geoMetaCache) return geoMetaCache;
+  const r = await fetch(GEO_BASE+'meta.json', { cache:'no-cache' });
+  if(!r.ok) throw new Error('Aún no están cargados los geodatos de INEGI en el CRM (falta la carpeta geodatos).');
+  geoMetaCache = await r.json();
+  geoMetaCache._set = {};
+  Object.entries(geoMetaCache.capas||{}).forEach(([k,c])=>{ geoMetaCache._set[k] = new Set(c.tiles||[]); });
+  return geoMetaCache;
+}
+function geoCapa(meta, capa){ return (meta.capas||{})[capa] || null; }
+async function geoTile(capa, x, y){
+  const meta = await geoMeta();
+  const k = x+'_'+y, id = capa+'/'+k;
+  if(!meta._set[capa] || !meta._set[capa].has(k)) return null;
+  if(!(id in geoTiles)){
+    geoTiles[id] = (async()=>{
+      const r = await fetch(GEO_BASE+capa+'/'+k+(capa==='dem'?'.bin':'.json'));
+      if(!r.ok) return null;
+      if(capa==='dem') return new Int16Array(await r.arrayBuffer());
+      return await r.json();
+    })();
+  }
+  return geoTiles[id];
+}
+
+// Proyección local en km alrededor del centro del terreno
+function vocProyector(lat0, lon0){
+  const kx = 111.320*Math.cos(lat0*Math.PI/180), ky = 110.574;
+  return (lon, lat)=>[(lon-lon0)*kx, (lat-lat0)*ky];
+}
+function segDist(px,py, ax,ay, bx,by){
+  const dx=bx-ax, dy=by-ay, l=dx*dx+dy*dy;
+  let t = l ? ((px-ax)*dx+(py-ay)*dy)/l : 0; t = Math.max(0, Math.min(1, t));
+  const x=ax+t*dx-px, y=ay+t*dy-py; return Math.sqrt(x*x+y*y);
+}
+function segCruza(a,b,c,d){
+  const o=(p,q,r)=>(q[0]-p[0])*(r[1]-p[1])-(q[1]-p[1])*(r[0]-p[0]);
+  const d1=o(c,d,a), d2=o(c,d,b), d3=o(a,b,c), d4=o(a,b,d);
+  return ((d1>0)!==(d2>0)) && ((d3>0)!==(d4>0));
+}
+function dentroDe(pt, anillos){  // par-impar sobre todos los anillos (respeta huecos)
+  let dentro = false;
+  for(const r of anillos){
+    for(let i=0, j=r.length-1; i<r.length; j=i++){
+      const [xi,yi]=r[i], [xj,yj]=r[j];
+      if(((yi>pt[1])!==(yj>pt[1])) && (pt[0] < (xj-xi)*(pt[1]-yi)/((yj-yi)||1e-12)+xi)) dentro = !dentro;
+    }
+  }
+  return dentro;
+}
+function bboxDe(pts){ let a=[Infinity,Infinity,-Infinity,-Infinity]; pts.forEach(p=>{ if(p[0]<a[0])a[0]=p[0]; if(p[1]<a[1])a[1]=p[1]; if(p[0]>a[2])a[2]=p[0]; if(p[1]>a[3])a[3]=p[1]; }); return a; }
+function bboxDist(a,b){ const dx=Math.max(0,a[0]-b[2],b[0]-a[2]), dy=Math.max(0,a[1]-b[3],b[1]-a[3]); return Math.sqrt(dx*dx+dy*dy); }
+
+// Terreno: anillos en km (proyección local), bbox y segmentos
+function vocTerreno(polis){
+  const todos = polis.flat();
+  const lat0 = todos.reduce((a,p)=>a+p[1],0)/todos.length, lon0 = todos.reduce((a,p)=>a+p[0],0)/todos.length;
+  const P = vocProyector(lat0, lon0);
+  const anillos = polis.map(r=>r.map(c=>P(c[0],c[1])));
+  const segs = []; anillos.forEach(r=>{ for(let i=0;i<r.length;i++){ const a=r[i], b=r[(i+1)%r.length]; if(a[0]!==b[0]||a[1]!==b[1]) segs.push([a,b]); } });
+  return { lat0, lon0, P, anillos, segs, bbox: bboxDe(anillos.flat()), lonlat: polis };
+}
+function decodificar(arr, P){ const out=[]; for(let i=0;i<arr.length;i+=2) out.push(P(arr[i]/GEO_Q, arr[i+1]/GEO_Q)); return out; }
+
+// Distancia del terreno a una figura (líneas o polígonos), en km
+function distFigura(T, partes, poligono, mejor){
+  let d = Infinity;
+  const bbs = partes.map(bboxDe);
+  if(poligono){
+    if(T.anillos.some(r=>r.some(p=>dentroDe(p, partes)))) return 0;
+    if(partes.some(r=>r.length && dentroDe(r[0], T.anillos))) return 0;
+  }
+  for(let k=0;k<partes.length;k++){
+    if(bboxDist(bbs[k], T.bbox) >= Math.min(d, mejor)) continue;
+    const r = partes[k];
+    for(let i=0;i<r.length-1;i++){
+      const a=r[i], b=r[i+1];
+      for(const [c,e] of T.segs){
+        if(segCruza(a,b,c,e)) return 0;
+        const m = Math.min(segDist(a[0],a[1],c[0],c[1],e[0],e[1]), segDist(b[0],b[1],c[0],c[1],e[0],e[1]),
+                           segDist(c[0],c[1],a[0],a[1],b[0],b[1]), segDist(e[0],e[1],a[0],a[1],b[0],b[1]));
+        if(m<d) d=m;
+      }
+    }
+  }
+  return d;
+}
+function distPunto(T, p){
+  if(dentroDe(p, T.anillos)) return 0;
+  let d = Infinity; for(const [a,b] of T.segs){ const m = segDist(p[0],p[1],a[0],a[1],b[0],b[1]); if(m<d) d=m; } return d;
+}
+
+// Búsqueda en anillos de cuadros alrededor del terreno, hasta encontrar el más cercano
+async function vocCercano(T, capa, opts){
+  opts = opts || {};
+  const meta = await geoMeta(), c = geoCapa(meta, capa);
+  if(!c) return { falta: true };
+  const maxR = opts.maxR || 3, filtro = opts.filtro || (()=>true);
+  const cx = Math.floor(T.lon0), cy = Math.floor(T.lat0);
+  const kmGrado = 111.32*Math.cos(Math.min(Math.abs(T.lat0)+1, 89)*Math.PI/180);
+  const radio = Math.max(Math.abs(T.bbox[0]),Math.abs(T.bbox[1]),T.bbox[2],T.bbox[3]);
+  let mejor = { d: Infinity };
+  const revisar = async (x,y)=>{
+    const tile = await geoTile(capa, x, y);
+    if(!tile) return;
+    if(tile.p){
+      tile.p.forEach(q=>{
+        if(!filtro(q)) return;
+        const d = distPunto(T, T.P(q[0]/GEO_Q, q[1]/GEO_Q));
+        if(d < mejor.d) mejor = { d, nombre: q[2], sub: q[3] };
+      });
+    } else (tile.f||[]).forEach(f=>{
+      if(!filtro(f)) return;
+      const partes = f.g.map(a=>decodificar(a, T.P));
+      const d = distFigura(T, partes, c.geom==='poligono', mejor.d);
+      if(d < mejor.d) mejor = { d, nombre: f.n||'', sub: f.t||'', f };
+    });
+  };
+  for(let r=0; r<=maxR; r++){
+    const lista = [];
+    for(let x=cx-r; x<=cx+r; x++) for(let y=cy-r; y<=cy+r; y++){ if(Math.max(Math.abs(x-cx),Math.abs(y-cy))===r) lista.push(revisar(x,y)); }
+    await Promise.all(lista);
+    if(mejor.d <= r*kmGrado - radio) break;  // ningún cuadro más lejano puede estar más cerca
+  }
+  mejor.limite = Math.round((maxR+0.5)*kmGrado/10)*10;
+  return mejor;
+}
+async function vocPuntosArchivo(T, archivo, filtro){
+  const id = 'archivo/'+archivo;
+  if(!(id in geoTiles)) geoTiles[id] = fetch(GEO_BASE+archivo).then(r=>r.ok?r.json():null);
+  const data = await geoTiles[id];
+  if(!data) return { falta: true };
+  let mejor = { d: Infinity };
+  (data.p||[]).forEach(q=>{ if(filtro && !filtro(q)) return; const d = distPunto(T, T.P(q[0]/GEO_Q, q[1]/GEO_Q)); if(d<mejor.d) mejor = { d, nombre:q[2], sub:q[3] }; });
+  return mejor;
+}
+async function vocClima(T){
+  const meta = await geoMeta(); if(!geoCapa(meta,'clima')) return { falta:true };
+  const tile = await geoTile('clima', Math.floor(T.lon0), Math.floor(T.lat0));
+  if(!tile) return { d: Infinity };
+  let mejor = null, dm = Infinity;
+  for(const f of tile.f||[]){
+    const partes = f.g.map(a=>decodificar(a, T.P));
+    if(dentroDe([0,0], partes)) return { nombre: f.n, clave: f.k||'' };
+    const d = distFigura(T, partes, true, dm); if(d<dm){ dm=d; mejor=f; }
+  }
+  return mejor ? { nombre: mejor.n, clave: mejor.k||'' } : { d: Infinity };
+}
+async function vocAltitud(T){
+  const meta = await geoMeta(), c = geoCapa(meta,'dem'); if(!c) return { falta:true };
+  const N = c.celdas || 600;
+  // puntos de muestra: rejilla dentro del contorno (hasta ~900), más vértices
+  const bb = bboxDe(T.lonlat.flat());
+  const paso = Math.max((bb[2]-bb[0])/30, (bb[3]-bb[1])/30, 0.5/N/4);
+  const muestras = [];
+  for(let x=bb[0]+paso/2; x<bb[2]; x+=paso) for(let y=bb[1]+paso/2; y<bb[3]; y+=paso){ if(dentroDe([x,y], T.lonlat)) muestras.push([x,y]); }
+  T.lonlat.flat().forEach(p=>muestras.push(p));
+  const vals = [];
+  for(const [lon,lat] of muestras){
+    const tx = Math.floor(lon), ty = Math.floor(lat);
+    const tile = await geoTile('dem', tx, ty); if(!tile) continue;
+    const col = Math.min(N-1, Math.floor((lon-tx)*N)), fila = Math.min(N-1, Math.floor((ty+1-lat)*N));
+    const v = tile[fila*N+col]; if(v>-1000) vals.push(v);
+  }
+  if(!vals.length){
+    // sin dato dentro del contorno (por ejemplo, marisma): se toma la celda válida más cercana, hasta ~1 km
+    const tx = Math.floor(T.lon0), ty = Math.floor(T.lat0), tile = await geoTile('dem', tx, ty);
+    if(tile){
+      const c0 = Math.floor((T.lon0-tx)*N), f0 = Math.floor((ty+1-T.lat0)*N);
+      for(let r=1; r<=6 && !vals.length; r++) for(let f=f0-r; f<=f0+r; f++) for(let c=c0-r; c<=c0+r; c++){
+        if(f<0||c<0||f>=N||c>=N) continue; const v = tile[f*N+c]; if(v>-1000) vals.push(v);
+      }
+    }
+    if(!vals.length) return { d: Infinity };
+    vals.sort((a,b)=>a-b);
+    return { media: Math.round(vals.reduce((a,v)=>a+v,0)/vals.length), min: vals[0], max: vals[vals.length-1], aprox: true };
+  }
+  vals.sort((a,b)=>a-b);
+  return { media: Math.round(vals.reduce((a,v)=>a+v,0)/vals.length), min: vals[0], max: vals[vals.length-1] };
+}
+
+function vocVocaciones(t){
+  if(t.tipo==='otro' || !t.tipo) return ['habitacional','industrial','agricola','turistico'];
+  return [t.tipo].filter(v=>VOC_NOMBRES[v]);
+}
+function vocRangoKm(d){
+  if(d < 1) return 'menos de 1 km';
+  const cortes = [[3,'1 a 3 km'],[5,'3 a 5 km'],[10,'5 a 10 km'],[20,'10 a 20 km'],[50,'20 a 50 km']];
+  for(const [h,txt] of cortes) if(d < h) return txt;
+  return 'más de 50 km';
+}
+function vocRangoAlt(m){ const b = Math.max(0, Math.floor(m/500)*500); return 'Altitud '+b.toLocaleString('es-MX')+' a '+(b+500).toLocaleString('es-MX')+' m'; }
+function vocKm(d){ return d < 10 ? Math.round(d*10)/10 : Math.round(d); }
+
+async function calcularVocacion(t, polis){
+  const meta = await geoMeta();
+  const T = vocTerreno(polis);
+  const voc = vocVocaciones(t);
+  const hoy = new Date().toISOString().slice(0,10);
+  const fuenteDe = capa=>{ const c = geoCapa(meta, capa); return c ? c.fuente + (c.edicion ? ' · '+c.edicion : '') : ''; };
+  const datos = [];
+  const add = (o)=>datos.push(Object.assign({ fecha: hoy }, o));
+  const distDato = (grupo, clave, dato, r, capa, extra)=>{
+    if(r.falta){ add({ grupo, clave, dato, valor:null, unidad:'km', fuente: FUENTES_VOC[capa]||capa, nota:'Capa pendiente de cargar' }); return null; }
+    if(!isFinite(r.d)){ add(Object.assign({ grupo, clave, dato, valor:null, unidad:'km', fuente: fuenteDe(capa), nota:'Ninguno en '+(r.limite||'')+' km a la redonda' }, extra||{})); return r; }
+    add(Object.assign({ grupo, clave, dato, valor: vocKm(r.d), unidad:'km', nombre: r.nombre||'', fuente: fuenteDe(capa) }, extra||{}));
+    return r;
+  };
+  const urbano = voc.includes('habitacional') || voc.includes('industrial');
+  let rUrb=null, rPind=null, rCosta=null, rCuerpo=null, rPM=null, alt=null;
+  if(urbano){
+    rUrb = await vocCercano(T, 'loc', { maxR: 3 });
+    distDato('habitacional','mancha_urbana','Distancia al borde de la localidad urbana más cercana', rUrb, 'loc', rUrb && isFinite(rUrb.d) ? { colinda: rUrb.d <= 0.05 } : null);
+    distDato('habitacional','escuela','Escuela más cercana', await vocCercano(T,'esc',{ maxR: 2 }), 'esc');
+    distDato('habitacional','salud','Clínica u hospital más cercano', await vocCercano(T,'sal',{ maxR: 2 }), 'sal');
+    distDato('habitacional','comercio','Centro comercial más cercano', await vocCercano(T,'com',{ maxR: 2 }), 'com');
+    rPind = await vocCercano(T,'pind',{ maxR: 3 });
+    distDato('habitacional','parque_industrial','Parque industrial más cercano', rPind, 'pind');
+  }
+  if(voc.includes('agricola')){
+    alt = await vocAltitud(T);
+    if(alt.falta) add({ grupo:'agricola', clave:'altitud', dato:'Altitud media del contorno', valor:null, unidad:'m s. n. m.', fuente: FUENTES_VOC.dem, nota:'Capa pendiente de cargar' });
+    else add({ grupo:'agricola', clave:'altitud', dato:'Altitud media del contorno', valor: isFinite(alt.media)?alt.media:null, unidad:'m s. n. m.', min: alt.min, max: alt.max, fuente: fuenteDe('dem'), nota: isFinite(alt.media)?(alt.aprox?'Aproximada con el terreno contiguo (sin dato dentro del contorno)':''):'Sin dato de elevación' });
+    const cl = await vocClima(T);
+    add({ grupo:'agricola', clave:'clima', dato:'Tipo de clima', valor: cl.nombre||null, unidad:'', clave_clima: cl.clave||'', fuente: cl.falta ? FUENTES_VOC.clima : fuenteDe('clima'), nota: cl.falta ? 'Capa pendiente de cargar' : (cl.nombre?'':'Sin dato') });
+    distDato('agricola','agroindustria','Empacadora, centro de acopio o bodega más cercana', await vocCercano(T,'agro',{ maxR: 2 }), 'agro');
+    const rio = await vocCercano(T,'rio',{ maxR: 2 }), cue = await vocCercano(T,'cuerpo',{ maxR: 2 });
+    const usarRio = !rio.falta && (cue.falta || rio.d <= cue.d);
+    const ra = usarRio ? rio : cue;
+    if(!ra.falta && isFinite(ra.d) && !ra.nombre) ra.nombre = usarRio ? 'Corriente sin nombre' : 'Cuerpo de agua sin nombre';
+    distDato('agricola','agua','Río o cuerpo de agua más cercano', ra, usarRio?'rio':'cuerpo', { nota: VOC_NOTA_AGUA, sub: usarRio ? 'río' : (ra.sub||'cuerpo de agua') });
+  }
+  if(voc.includes('turistico')){
+    rCosta = await vocCercano(T,'costa',{ maxR: 6 });
+    distDato('turistico','costa','Distancia a la costa', rCosta, 'costa');
+    rCuerpo = await vocCercano(T,'cuerpo',{ maxR: 3, filtro: f=>(f.a||0) >= 20 && f.t!=='cuerpo' || (f.a||0) >= 100 });
+    distDato('turistico','lago_presa','Distancia a un lago o presa', rCuerpo, 'cuerpo', { sub: rCuerpo && rCuerpo.sub });
+    rPM = await vocPuntosArchivo(T, 'pm.json');
+    distDato('turistico','pueblo_magico','Pueblo Mágico más cercano', rPM, 'pm');
+  }
+  // un dato destacado por vocación, en rango
+  const destacados = {};
+  const ok = r=>r && !r.falta && isFinite(r.d);
+  if(voc.includes('habitacional') && ok(rUrb)) destacados.habitacional = rUrb.d <= 0.05 ? 'Colinda con la mancha urbana' : 'A '+vocRangoKm(rUrb.d)+' de la mancha urbana';
+  if(voc.includes('industrial') && ok(rPind)) destacados.industrial = 'A '+vocRangoKm(rPind.d)+' de un parque industrial';
+  if(voc.includes('agricola') && alt && isFinite(alt.media)) destacados.agricola = vocRangoAlt(alt.media);
+  if(voc.includes('turistico')){
+    const opciones = [];
+    if(ok(rCosta)) opciones.push([rCosta.d, rCosta.d<=0.05 ? 'Con frente a la costa' : 'A '+vocRangoKm(rCosta.d)+' de la costa']);
+    if(ok(rCuerpo)){ const q = rCuerpo.sub==='presa' ? 'una presa' : (rCuerpo.sub==='lago' ? 'un lago' : 'un cuerpo de agua'); opciones.push([rCuerpo.d, rCuerpo.d<=0.05 ? 'Colinda con '+q : 'A '+vocRangoKm(rCuerpo.d)+' de '+q]); }
+    if(ok(rPM)) opciones.push([rPM.d, 'A '+vocRangoKm(rPM.d)+' de un Pueblo Mágico']);
+    opciones.sort((a,b)=>a[0]-b[0]);
+    if(opciones.length) destacados.turistico = opciones[0][1];
+  }
+  return { version: 1, calculado_el: new Date().toISOString(), geodatos: meta.version||'', vocaciones: voc,
+           centro: [Math.round(T.lon0*1e5)/1e5, Math.round(T.lat0*1e5)/1e5], datos, destacados };
+}
+const FUENTES_VOC = { loc:'INEGI, Marco Geoestadístico', esc:'INEGI, DENUE', sal:'INEGI, DENUE', com:'INEGI, DENUE', pind:'INEGI, DENUE', agro:'INEGI, DENUE',
+  dem:'INEGI, Continuo de Elevaciones Mexicano', clima:'INEGI, Unidades climáticas', rio:'INEGI, Red Hidrográfica', cuerpo:'INEGI, Red Hidrográfica', costa:'INEGI, Marco Geoestadístico', pm:'SECTUR, Pueblos Mágicos' };
+
+async function contornoTerreno(t){
+  if(trArchivoTipo(t)!=='kmz' || !t.kmz_path) return null;
+  const { data, error } = await client.storage.from('kmz-terrenos').createSignedUrl(t.kmz_path, 300);
+  if(error || !data) throw new Error(error ? error.message : 'sin enlace al KMZ');
+  const blob = await (await fetch(data.signedUrl)).blob();
+  const kml = await kmlTexto(new File([blob], 'terreno.'+extDe(t.kmz_path)));
+  const { polis } = kml ? leerKML(kml) : { polis: [] };
+  return polis.length ? polis.map(p=>p.map(c=>[c[0],c[1]])) : null;
+}
+async function calcularVocacionTerreno(id, silencioso){
+  const t = terrenos.find(x=>x.id===id);
+  const btn = document.getElementById('tr-voc-'+id), antes = btn ? btn.textContent : '';
+  try{
+    if(btn){ btn.textContent = 'calculando…'; btn.disabled = true; }
+    if(trArchivoTipo(t)!=='kmz') throw new Error('Se necesita el KMZ del terreno. Con el cuadro de construcción todavía no se calcula.');
+    const polis = await contornoTerreno(t);
+    if(!polis) throw new Error('El KMZ no trae un contorno cerrado.');
+    const dv = await calcularVocacion(t, polis);
+    const { error } = await client.from('terrenos_captados').update({ datos_vocacion: dv }).eq('id', id);
+    if(error) throw new Error(error.message.includes('datos_vocacion') ? 'Falta correr el SQL v2.4 (columna datos_vocacion) en Supabase.' : error.message);
+    t.datos_vocacion = dv;
+    if(!silencioso) renderTerrenos();
+    return true;
+  }catch(e){
+    if(!silencioso) alert('No se pudieron calcular los datos de vocación: '+e.message);
+    return e.message;
+  }finally{
+    if(btn){ btn.textContent = antes; btn.disabled = false; }
+  }
+}
+async function calcularVocacionFiltrados(btn){
+  const lista = terrenosFiltrados().filter(t=>trArchivoTipo(t)==='kmz' && !t.datos_vocacion);
+  if(!lista.length){ alert('Todos los terrenos con KMZ de esta lista ya tienen sus datos de vocación.'); return; }
+  const antes = btn.textContent; btn.disabled = true;
+  const fallas = [];
+  for(let i=0;i<lista.length;i++){
+    btn.textContent = 'calculando '+(i+1)+' de '+lista.length+'…';
+    const r = await calcularVocacionTerreno(lista[i].id, true);
+    if(r!==true) fallas.push((lista[i].folio||lista[i].id)+': '+r);
+  }
+  btn.textContent = antes; btn.disabled = false;
+  renderTerrenos();
+  alert('Listo: '+(lista.length-fallas.length)+' de '+lista.length+' calculados.'+(fallas.length ? '\n\nSin calcular:\n'+fallas.join('\n') : ''));
+}
+
+// Presentación
+function vocValorTxt(d){
+  if(d.valor===null || d.valor===undefined || d.valor==='') return d.nota || 'Sin dato';
+  if(d.clave==='mancha_urbana' && d.colinda) return 'Colinda'+(d.nombre ? ' ('+d.nombre+')' : '');
+  if(d.clave==='altitud') return Number(d.valor).toLocaleString('es-MX')+' m s. n. m.'+(isFinite(d.min) ? ' (de '+Number(d.min).toLocaleString('es-MX')+' a '+Number(d.max).toLocaleString('es-MX')+' m)' : '');
+  if(d.clave==='clima') return d.valor + (d.clave_clima ? ' ['+d.clave_clima+']' : '');
+  const km = Number(d.valor).toLocaleString('es-MX')+' km';
+  const nom = d.nombre ? (d.sub && !['escuela','centro comercial','parque industrial'].includes(d.sub) && !norm0(d.nombre).includes(norm0(d.sub)) ? d.sub+': ' : '') + d.nombre : '';
+  return km + (nom ? ' · '+nom : '');
+}
+function norm0(s){ return String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase(); }
+function vocFecha(iso){ try{ return new Date(iso).toLocaleDateString('es-MX',{ timeZone:'America/Mexico_City', day:'numeric', month:'short', year:'numeric' }); }catch(e){ return ''; } }
+function vocLineasFicha(t){
+  const dv = t.datos_vocacion; if(!dv || !Array.isArray(dv.datos)) return [];
+  const L = ['DATOS POR VOCACIÓN (calculados el '+vocFecha(dv.calculado_el)+')'];
+  const grupos = { habitacional:'Habitacional e industrial', agricola:'Agrícola', turistico:'Turístico' };
+  Object.keys(grupos).forEach(g=>{
+    const ds = dv.datos.filter(d=>d.grupo===g); if(!ds.length) return;
+    L.push(grupos[g]+':');
+    ds.forEach(d=>{
+      L.push('· '+d.dato+': '+vocValorTxt(d)+' — Fuente: '+d.fuente);
+      if(d.nota && d.valor!==null && d.valor!==undefined && d.valor!=='' ) L.push('  '+d.nota+'.');
+    });
+  });
+  const dest = Object.entries(dv.destacados||{});
+  if(dest.length){ L.push('Dato destacado para la Selección de Activos:'); dest.forEach(([v,txt])=>L.push('· '+VOC_NOMBRES[v]+': '+txt)); }
+  L.push('No se calculan tipo de suelo ni distrito de riego.');
+  return L;
+}
+function vocTarjetaHTML(t){
+  const dv = t.datos_vocacion;
+  if(!dv || !Array.isArray(dv.datos)) return '';
+  const dest = Object.entries(dv.destacados||{}).map(([v,txt])=>esc(VOC_NOMBRES[v])+': '+esc(txt)).join(' · ');
+  const filas = vocLineasFicha(t).slice(1).map(esc).join('\n');
+  return '<p class="stat-sub" style="margin:4px 0 0;color:var(--brass);">Vocación · '+(dest || 'sin dato destacado')+'</p>'+
+    '<details class="conv"><summary>ver datos por vocación (calculados el '+esc(vocFecha(dv.calculado_el))+')</summary><pre>'+filas+'</pre></details>';
+}
+function vocTextoInventario(t){
+  const dv = t.datos_vocacion; if(!dv || !dv.destacados) return '';
+  const dest = Object.entries(dv.destacados);
+  if(!dest.length) return '';
+  return ['Folio '+(t.folio||'')].concat(dest.map(([v,txt])=>VOC_NOMBRES[v]+': '+txt)).join('\n');
+}
+async function copiarInventario(id){
+  const t = terrenos.find(x=>x.id===id), txt = vocTextoInventario(t);
+  if(!txt){ alert('Este terreno aún no tiene dato destacado.'); return; }
+  const btn = document.getElementById('tr-inv-'+id), ok = await copiarTexto(txt);
+  if(btn){ const a = btn.textContent; btn.textContent = ok ? '¡copiado!' : 'no se pudo copiar'; setTimeout(()=>btn.textContent=a, 1600); }
+}
+function descargarInventarioTxt(){
+  const lista = terrenosFiltrados().filter(t=>vocTextoInventario(t));
+  if(!lista.length){ alert('Ningún terreno de esta lista tiene datos de vocación calculados.'); return; }
+  descargarArchivo(nombreArchivoTerrenos('txt').replace(/^terrenos/,'inventario_vocacion'), '﻿'+lista.map(vocTextoInventario).join('\n\n')+'\n', 'text/plain;charset=utf-8');
+}
+
 // ───────── Descargar todo de un terreno: datos, seguimiento, conversación y archivos ─────────
 function informacionCompleta(t){
   const L = [];
@@ -2132,6 +2510,8 @@ function informacionCompleta(t){
   L.push('Fecha de registro: ' + new Date(t.created_at).toLocaleString('es-MX',{ timeZone:'America/Mexico_City' }));
   const falt = faltantesTerreno(t);
   L.push('Pendiente para revisión: ' + (falt.length ? falt.join(' ') : 'nada, registro completo'));
+  const voc = vocLineasFicha(t);
+  if(voc.length){ L.push(''); voc.forEach(x=>L.push(x)); }
   L.push('');
   L.push('NOTAS');
   L.push(t.notas ? t.notas : '(sin notas)');
