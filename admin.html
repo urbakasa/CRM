@@ -3433,31 +3433,91 @@ function embAsignacionHTML(t){
   const ya = embAsignaciones(t).map(c=>c.created_by);
   const libres = lista.filter(e=>!ya.includes(e.id));
   let h = '';
-  if(libres.length) h += '<select onchange="if(this.value){ embAsignar(\''+t.id+'\', this.value); }" style="width:auto;"><option value="">asignar a embajador…</option>'+
+  if(libres.length) h += '<select onchange="if(this.value){ embAbrirAsignar(\''+t.id+'\', this.value); }" style="width:auto;"><option value="">asignar a embajador…</option>'+
     libres.map(e=>'<option value="'+e.id+'">'+esc(e.nombre||'sin nombre')+'</option>').join('')+'</select>';
-  embAsignaciones(t).forEach(c=>{ h += '<button class="edit-link" onclick="embQuitar(\''+c.id+'\')">quitar a '+esc(nombrePerfil(c.created_by))+'</button>'; });
-  return h;
+  embAsignaciones(t).forEach(c=>{
+    h += '<button class="edit-link" onclick="embDocumentos(\''+c.id+'\')">documentos con '+esc(nombrePerfil(c.created_by))+'</button>';
+    h += '<button class="edit-link" onclick="embQuitar(\''+c.id+'\')">quitar a '+esc(nombrePerfil(c.created_by))+'</button>';
+  });
+  return h+'<div id="emb-box-'+t.id+'"></div>';
 }
 function embFicha(t){
   // ficha para el embajador: datos del terreno y contacto, sin condiciones con Urbakasa ni notas internas
   return fichaTerreno(t).replace(/\*/g,'').split('\n').filter(l=>!/^(Condiciones con Urbakasa|Autorización)/.test(l)).join('\n');
 }
+function embAbrirAsignar(terrenoId, embId){
+  const t = terrenos.find(x=>x.id===terrenoId), e = perfiles.find(p=>p.id===embId), box = document.getElementById('emb-box-'+terrenoId);
+  box.innerHTML = '<div class="mr-resumen" style="display:block;margin-top:8px;">'+
+    '<p class="stat-sub" style="margin:0 0 6px;"><strong>Asignar el terreno '+esc(t.folio||'')+' a '+esc(e.nombre||'')+'</strong> para la venta del DVT. Verá la ficha del terreno, sus archivos (KMZ, cuadro y fotos) y los documentos que adjuntes aquí.</p>'+
+    '<label>Documentos para '+esc(e.nombre||'')+' (opcional; PDF u otros, hasta 15 MB cada uno)</label><input type="file" id="emb-docs-'+terrenoId+'" multiple>'+
+    '<button class="edit-link tr-copiar" id="emb-btn-'+terrenoId+'" onclick="embAsignar(\''+terrenoId+'\',\''+embId+'\')">asignar</button>'+
+    '<button class="edit-link" onclick="renderTerrenos()">cancelar</button></div>';
+}
+function embRutaSegura(nombre){ return String(nombre||'archivo').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^\w.\-]+/g,'_').slice(-90); }
+async function embSubirDocs(prospectoId, files){
+  const fallas = [];
+  for(const f of files){
+    if(f.size > 15*1024*1024){ fallas.push(f.name+' (pesa más de 15 MB)'); continue; }
+    const path = prospectoId+'/'+Date.now()+'-'+embRutaSegura(f.name);
+    const { error } = await client.storage.from('asignaciones').upload(path, f, { contentType: f.type || 'application/octet-stream' });
+    if(error) fallas.push(f.name+' ('+error.message+')');
+  }
+  return fallas;
+}
 async function embAsignar(terrenoId, embId){
   const t = terrenos.find(x=>x.id===terrenoId), e = perfiles.find(p=>p.id===embId);
-  if(!confirm('¿Asignar el terreno '+(t.folio||'')+' a '+(e.nombre||'el embajador')+' para la venta del DVT?')) { renderTerrenos(); return; }
+  const btn = document.getElementById('emb-btn-'+terrenoId), inp = document.getElementById('emb-docs-'+terrenoId);
+  const files = inp ? [...inp.files] : [];
+  if(btn){ btn.disabled = true; btn.textContent = 'asignando…'; }
+  const pid = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, ch=>{ const r = crypto.getRandomValues(new Uint8Array(1))[0] & 15; return (ch==='x' ? r : (r&3|8)).toString(16); });
   const tipo = { propietario:'Propietario', corredor:'Corredor independiente', asesor:'Asesor Inmobiliario' }[t.rol] || 'Propietario';
   const { error } = await client.from('prospectos').insert({
-    created_by: embId, canal: 'embajador', estado: 'contacto', fecha: todayISO(),
+    id: pid, created_by: embId, canal: 'embajador', estado: 'contacto', fecha: todayISO(),
     nombre: (t.nombre||'Sin nombre')+' · terreno '+(t.folio||''), telefono: t.whatsapp ? trTel(t.whatsapp) : '', tipo,
     terreno_id: t.id, terreno_folio: t.folio || null, terreno_ficha: embFicha(t), asignado_at: new Date().toISOString(),
     comentarios_log: [{ texto: 'Asignado por Jorge para la venta del DVT (terreno '+(t.folio||'')+').', fecha: todayISO() }]
   });
   if(error){ alert('No se pudo asignar'+(/terreno_/.test(error.message)?' (falta correr el SQL v2.7)':'')+': '+error.message); }
+  else if(files.length){
+    const fallas = await embSubirDocs(pid, files);
+    if(fallas.length) alert('Se asignó el terreno, pero no se subieron estos documentos'+(fallas.some(f=>/bucket|not found/i.test(f))?' (falta correr el SQL v2.8)':'')+':\n'+fallas.join('\n'));
+  }
   await loadAll(); renderAll();
+}
+// Documentos de una asignación: los que sube Jorge y los que sube el embajador
+async function embDocumentos(prospectoId){
+  const c = prospectos.find(x=>x.id===prospectoId), box = document.getElementById('emb-box-'+c.terreno_id);
+  if(!box) return;
+  if(box.dataset.abierto===prospectoId){ box.innerHTML=''; box.dataset.abierto=''; return; }
+  box.dataset.abierto = prospectoId;
+  box.innerHTML = '<p class="stat-sub">Cargando documentos…</p>';
+  const { data, error } = await client.storage.from('asignaciones').list(prospectoId, { limit: 100, sortBy: { column: 'created_at', order: 'desc' } });
+  const lista = (data||[]).filter(f=>f.name && !f.name.startsWith('.'));
+  box.innerHTML = '<div class="mr-resumen" style="display:block;margin-top:8px;">'+
+    '<p class="stat-sub" style="margin:0 0 6px;"><strong>Documentos con '+esc(nombrePerfil(c.created_by))+'</strong> (los que subes tú y los que sube '+esc(nombrePerfil(c.created_by))+')</p>'+
+    (error ? '<p class="stat-sub" style="color:var(--rust)">No se pudieron leer: '+esc(error.message)+' (¿ya corriste el SQL v2.8?)</p>' :
+      (lista.length ? lista.map(f=>'<p class="stat-sub" style="margin:2px 0;"><a href="#" style="color:var(--moss)" onclick="embDescargar(\''+prospectoId+'\',\''+esc(f.name)+'\');return false;">'+esc(f.name.replace(/^\d+-/,''))+'</a> · '+esc(new Date(f.created_at).toLocaleDateString('es-MX'))+'</p>').join('') : '<p class="stat-sub">Aún no hay documentos.</p>'))+
+    '<label>Agregar documentos</label><input type="file" id="emb-mas-'+prospectoId+'" multiple>'+
+    '<button class="edit-link" onclick="embAgregar(\''+prospectoId+'\')">subir</button></div>';
+}
+async function embDescargar(prospectoId, nombre){
+  const { data, error } = await client.storage.from('asignaciones').createSignedUrl(prospectoId+'/'+nombre, 300, { download: nombre.replace(/^\d+-/,'') });
+  if(error || !data){ alert('No se pudo descargar: '+(error?error.message:'')); return; }
+  window.location.href = data.signedUrl;
+}
+async function embAgregar(prospectoId){
+  const files = [...(document.getElementById('emb-mas-'+prospectoId).files||[])];
+  if(!files.length){ alert('Elige al menos un archivo.'); return; }
+  const fallas = await embSubirDocs(prospectoId, files);
+  if(fallas.length) alert('No se subieron:\n'+fallas.join('\n'));
+  const c = prospectos.find(x=>x.id===prospectoId), box = document.getElementById('emb-box-'+c.terreno_id); box.dataset.abierto='';
+  embDocumentos(prospectoId);
 }
 async function embQuitar(prospectoId){
   const c = prospectos.find(x=>x.id===prospectoId);
-  if(!confirm('¿Quitar la asignación a '+nombrePerfil(c.created_by)+'? Se borra ese contacto de su pipeline, con sus notas.')) return;
+  if(!confirm('¿Quitar la asignación a '+nombrePerfil(c.created_by)+'? Se borra ese contacto de su pipeline, con sus notas y documentos.')) return;
+  const { data: docs } = await client.storage.from('asignaciones').list(prospectoId, { limit: 100 });
+  if(docs && docs.length) await client.storage.from('asignaciones').remove(docs.map(f=>prospectoId+'/'+f.name));
   const { error } = await client.from('prospectos').delete().eq('id', prospectoId);
   if(error) alert('No se pudo quitar: '+error.message);
   await loadAll(); renderAll();
