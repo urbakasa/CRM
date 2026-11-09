@@ -78,6 +78,7 @@
   .mr-resumen{margin-top:14px;padding:12px 14px;border:1px solid var(--line);border-left:2px solid var(--brass);background:var(--field);font-size:13px;color:var(--ink);}
   .mr-resumen p{margin:0 0 6px;}
   .mr-resumen .av{color:var(--rust);}
+  textarea.auto{border-color:var(--brass);box-shadow:0 0 0 1px var(--brass) inset;}
   input.auto,select.auto{border-color:var(--brass);box-shadow:0 0 0 1px var(--brass) inset;}
   details.conv{margin-top:4px;}
   details.conv summary{cursor:pointer;color:var(--ink-soft);font-size:11.5px;text-decoration:underline;}
@@ -92,7 +93,7 @@
   .check-crm input{width:auto;margin-top:3px;}
   .tr-export{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;padding-bottom:10px;border-bottom:1px solid var(--line);}
   .tr-copiar{font-weight:600;}
-  #terrenos-badge{margin-left:4px;color:var(--rust);}
+  #terrenos-badge,#rq-badge{margin-left:4px;color:var(--rust);}
   .emb-row button{white-space:nowrap;font-size:12px;padding:6px 10px;background:var(--ink);color:var(--paper-card);border:none;border-radius:3px;cursor:pointer;}
   svg text{font-family:'IBM Plex Mono',monospace;}
 
@@ -148,6 +149,7 @@
     <button class="tab" data-tab="avisos">Avisos</button>
     <button class="tab" data-tab="leadsweb">Leads Web</button>
     <button class="tab" data-tab="terrenos">Terrenos<span id="terrenos-badge"></span></button>
+    <button class="tab" data-tab="requerimientos">Requerimientos<span id="rq-badge"></span></button>
     <button class="tab" data-tab="historial">Historial</button>
   </div>
 
@@ -328,6 +330,12 @@
       <div id="leadsweb-body"></div>
       <p class="empty" id="leadsweb-empty" style="display:none;">Aún no ha llegado ningún lead desde la web.</p>
     </div>
+    <div class="card">
+      <h3>Preguntas más repetidas del <em>mes</em></h3>
+      <p class="stat-sub">Uso interno: las 5 etiquetas más repetidas en Leads Web, Terrenos y Requerimientos, con las frases exactas de los clientes. Nada de esto se publica.</p>
+      <label>Mes</label><select id="pq-mes" onchange="renderPreguntasResumen()" style="max-width:180px;"></select>
+      <div id="pq-resumen" style="margin-top:10px;"></div>
+    </div>
   </div>
 
   <div class="panel" id="panel-terrenos">
@@ -450,6 +458,86 @@
     </div>
   </div>
 
+  <div class="panel" id="panel-requerimientos">
+    <div class="card">
+      <p class="stat-sub">Requerimientos registrados en urbakasa.com/registro-requerimiento. Plazo de respuesta al cliente: máximo 2 días hábiles. El cruce con terrenos es solo para ti; nunca se avisa a nadie automáticamente.</p>
+      <div class="grid3" id="rq-resumen" style="margin-top:14px;"></div>
+      <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-top:12px;">
+        <div style="max-width:240px;"><label>Tipo de cambio USD para el cruce (MXN)</label><input id="rq-tc" inputmode="decimal" placeholder="Ej. 18.40"></div>
+        <button class="sort-dir-btn" onclick="guardarTipoCambio()">guardar tipo de cambio</button>
+      </div>
+      <button class="action" onclick="rqToggle()">+ Registrar requerimiento recibido</button>
+    </div>
+    <div class="card" id="rq-card" style="display:none;">
+      <h3 id="rqm-titulo">Registrar requerimiento recibido por <em>WhatsApp o correo</em></h3>
+      <div id="rqm-alta">
+        <label>Llegó por</label><select id="rqm-captura"><option value="whatsapp">WhatsApp</option><option value="correo">Correo</option></select>
+        <label>1 · Pega la conversación o el correo</label>
+        <textarea id="rqm-texto" style="min-height:140px" placeholder="Pega aquí la conversación de WhatsApp o el texto del correo; tus propios mensajes se ignoran."></textarea>
+        <button class="action" onclick="rqLeer()">2 · Leer y llenar automáticamente</button>
+        <div id="rqm-resumen" class="mr-resumen" style="display:none;"></div>
+      </div>
+      <h3 style="margin-top:20px;">Revisa y completa</h3>
+      <div class="grid2">
+        <div><label>Nombre</label><input id="rqm-nombre"></div>
+        <div><label>Empresa</label><input id="rqm-empresa"></div>
+        <div><label>Correo</label><input id="rqm-correo" type="email"></div>
+        <div><label>WhatsApp (10 dígitos)</label><input id="rqm-whatsapp" inputmode="numeric"></div>
+        <div><label>Medio preferido</label><select id="rqm-canal"><option value="">Sin dato</option><option value="whatsapp">WhatsApp</option><option value="correo">Correo</option></select></div>
+        <div><label>Rol</label><select id="rqm-rol"><option value="">Sin dato</option><option value="comprador">Comprador</option><option value="asesor">Asesor</option></select></div>
+        <div><label>Perfil</label><select id="rqm-perfil"><option value="">Sin dato</option><option value="empresa_opera">Empresa que opera</option><option value="desarrolladora">Desarrolladora</option><option value="agroindustria">Agroindustria</option><option value="inversionista">Inversionista</option><option value="persona_fisica">Persona física</option></select></div>
+        <div><label>Modalidad</label><select id="rqm-modalidad"><option value="">Sin dato</option><option value="compra">Compra</option><option value="renta">Renta</option><option value="aportacion">Aportación</option><option value="sin_definir">Sin definir</option></select></div>
+        <div><label>Busca</label><select id="rqm-busca"><option value="terreno">Terreno</option><option value="proyecto">Proyecto ya estructurado</option></select></div>
+        <div><label>Tipo</label><select id="rqm-tipo" onchange="rqSubs()"><option value="">Sin dato</option><option value="agricola">Agrícola</option><option value="industrial">Industrial</option><option value="habitacional">Habitacional</option><option value="turistico">Turístico</option><option value="otro">Otro</option></select></div>
+        <div><label>Tipo de proyecto</label><select id="rqm-sub"></select></div>
+        <div><label>Otro (¿cuál?)</label><input id="rqm-otro" maxlength="160"></div>
+        <div><label>Estado</label><select id="rqm-estado"></select></div>
+        <div><label>Municipio o zona</label><input id="rqm-municipio"></div>
+        <div><label>Superficie desde (ha)</label><input id="rqm-desde" inputmode="decimal"></div>
+        <div><label>Superficie hasta (ha, opcional)</label><input id="rqm-hasta" inputmode="decimal"></div>
+        <div><label>Posibilidad de crecer</label><select id="rqm-crecer"><option value="">Sin dato</option><option value="si">Sí</option><option value="no">No</option></select></div>
+        <div><label>Presupuesto</label><input id="rqm-presupuesto" inputmode="numeric"></div>
+        <div><label>Moneda</label><select id="rqm-moneda"><option value="">Sin dato</option><option>MXN</option><option>USD</option></select></div>
+        <div><label>Unidad del presupuesto</label><select id="rqm-unidad"><option value="">Sin dato</option><option value="total">En total</option><option value="por_ha">Por hectárea</option><option value="por_m2">Por m²</option><option value="mes_total">Renta: al mes, en total</option><option value="anio_ha">Renta: por hectárea al año</option><option value="mes_m2">Renta: por m² al mes</option></select></div>
+        <div><label>Agua</label><select id="rqm-agua"><option value="">Sin dato</option><option value="si">Sí la necesita</option><option value="no">No la necesita</option><option value="no_se">No sabe</option></select></div>
+        <div><label>Volumen de agua (m³ al año)</label><input id="rqm-aguavol" inputmode="numeric"></div>
+        <div><label>Uso de suelo autorizado</label><select id="rqm-uso"><option value="">Sin dato</option><option value="si">Sí</option><option value="no">No</option><option value="no_se">No sabe</option></select></div>
+        <div><label>¿Cuál uso de suelo?</label><input id="rqm-usocual"></div>
+        <div><label>Energía (carga)</label><input id="rqm-energia"></div>
+        <div><label>Cultivo</label><input id="rqm-cultivo"></div>
+        <div><label>Altitud</label><input id="rqm-altitud"></div>
+        <div><label>Plazo</label><select id="rqm-plazo"><option value="">Sin dato</option><option value="menos_6">Menos de 6 meses</option><option value="6_12">De 6 a 12 meses</option><option value="mas_12">Más de 12 meses</option><option value="sin_fecha">Sin fecha</option></select></div>
+        <div><label>Zonas que descarta</label><input id="rqm-zonas"></div>
+      </div>
+      <label>Descripción</label><textarea id="rqm-descripcion"></textarea>
+      <label>Cercanía a</label><div id="rqm-cercania"></div>
+      <label>Descarta</label><div id="rqm-descarta"></div>
+      <label>Otro descarte</label><input id="rqm-descartaotro">
+      <label class="check-crm"><input type="checkbox" id="rqm-repr"> (Asesor) Representa directamente al comprador</label>
+      <label class="check-crm"><input type="checkbox" id="rqm-conf"> Pidió confidencialidad</label>
+      <label>Documento del requerimiento (PDF, Word o Excel, menos de 10 MB)</label>
+      <input type="file" id="rqm-doc" onchange="rqArchivo = this.files[0] || null">
+      <label>Notas</label><textarea id="rqm-notas"></textarea>
+      <button class="action" id="rqm-btn" onclick="rqGuardar()">Registrar y asignar folio</button>
+      <button class="sort-dir-btn" id="rqm-cancelar" style="display:none;margin-left:8px;" onclick="rqCancelar()">Cancelar</button>
+      <p class="stat-sub" id="rqm-msg" style="margin-top:10px;"></p>
+    </div>
+    <div class="card">
+      <div class="sort-controls">
+        <label style="margin:0;">Tipo</label><select id="rf-tipo" onchange="renderRequerimientos()"><option value="">Todos</option><option value="agricola">Agrícola</option><option value="industrial">Industrial</option><option value="habitacional">Habitacional</option><option value="turistico">Turístico</option><option value="otro">Otro</option></select>
+        <label style="margin:0;">Modalidad</label><select id="rf-modalidad" onchange="renderRequerimientos()"><option value="">Todas</option><option value="compra">Compra</option><option value="renta">Renta</option><option value="aportacion">Aportación</option><option value="sin_definir">Sin definir</option></select>
+        <label style="margin:0;">Rol</label><select id="rf-rol" onchange="renderRequerimientos()"><option value="">Todos</option><option value="comprador">Comprador</option><option value="asesor">Asesor</option></select>
+        <label style="margin:0;">Etapa</label><select id="rf-etapa" onchange="renderRequerimientos()"></select>
+        <label style="margin:0;">Origen</label><select id="rf-origen" onchange="renderRequerimientos()"></select>
+        <label style="margin:0;">Medio</label><select id="rf-canal" onchange="renderRequerimientos()"><option value="">Todos</option><option value="whatsapp">WhatsApp</option><option value="correo">Correo</option></select>
+      </div>
+      <input id="rf-buscar" placeholder="Buscar por folio, nombre, empresa o texto" oninput="renderRequerimientos()" style="margin-bottom:10px;">
+      <div class="tr-export"><span class="stat-sub" id="rf-conteo" style="margin:0;"></span></div>
+      <div id="rq-body"></div>
+      <p class="empty" id="rq-empty" style="display:none;">Aún no hay requerimientos registrados.</p>
+    </div>
+  </div>
+
   <div class="panel" id="panel-historial">
     <div class="card">
       <h3>Historial semanal <span id="historial-rango"></span></h3>
@@ -516,16 +604,23 @@ async function logout(){
 }
 
 async function loadAll(){
-  const [p, c, pf, av, lw, tr] = await Promise.all([
+  const [p, c, pf, av, lw, tr, rq, cfg, pq] = await Promise.all([
     client.from('prospectos').select('*').order('fecha', { ascending: false }),
     client.from('cobros').select('*').order('fecha', { ascending: false }),
     client.from('perfiles').select('*').order('rol'),
     client.from('avisos').select('*').order('created_at', { ascending: false }),
     client.from('leads_propietarios').select('*').order('fecha', { ascending: false }),
-    client.from('terrenos_captados').select('*').order('created_at', { ascending: false })
+    client.from('terrenos_captados').select('*').order('created_at', { ascending: false }),
+    client.from('requerimientos').select('*').order('created_at', { ascending: false }),
+    client.from('crm_config').select('*'),
+    client.from('preguntas_clientes').select('*').order('created_at', { ascending: false })
   ]);
   terrenos = tr.data || [];
   terrenosError = tr.error ? tr.error.message : null;
+  requerimientos = (rq && rq.data) || [];
+  requerimientosError = rq && rq.error ? rq.error.message : null;
+  crmConfig = {}; ((cfg && cfg.data) || []).forEach(x=>{ crmConfig[x.clave] = x.valor; });
+  preguntas = (pq && pq.data) || [];
   prospectos = p.data || [];
   cobros = c.data || [];
   perfiles = pf.data || [];
@@ -655,6 +750,8 @@ function renderAll(){
   renderAvisos();
   renderLeadsWeb();
   renderTerrenos();
+  renderRequerimientos();
+  renderPreguntasResumen();
   renderHistorial();
 }
 
@@ -1012,8 +1109,9 @@ function renderLeadsWeb(){
       '<div style="margin-top:6px;display:flex;gap:10px;flex-wrap:wrap;">'+
       (l.revisado ? '' : '<button class="edit-link" onclick="marcarLeadRevisado(\''+l.id+'\')">marcar revisado</button>')+
       '<button class="edit-link" onclick="agregarLeadAPipeline(\''+l.id+'\')">agregar a pipeline</button>'+
+      '<button class="edit-link" onclick="pqAbrir(\'lead\',\''+l.id+'\')">registrar pregunta</button>'+
       '<button class="del" onclick="deleteLead(\''+l.id+'\')">eliminar</button>'+
-      '</div>';
+      '</div>'+pqResumenRegistro('lead', l.id)+'<div id="pq-form-lead-'+l.id+'"></div>';
     body.appendChild(div);
   });
 }
@@ -1213,6 +1311,8 @@ function renderTerrenos(){
         ' · '+(t.autoriza_presentacion ? 'autorizó presentarlo' : '<span style="color:var(--rust)">sin autorización de presentación</span>')+'</p>'+
       (detalle ? '<p class="stat-sub" style="margin:2px 0;">'+detalle+'</p>' : '')+
       vocTarjetaHTML(t)+
+      (function(){ const rc = requerimientosQueCumple(t); return '<details class="conv"><summary>requerimientos que cumple ('+rc.length+')</summary>'+cruceHTML(rc,'requerimientos')+'</details>'; })()+
+      pqResumenRegistro('terreno', t.id)+
       ((Array.isArray(t.archivos) && t.archivos.length) ? '<p class="stat-sub" style="margin:4px 0 0;">Archivos: '+t.archivos.map((a,i)=>'<button class="edit-link" style="display:inline;padding:0;" onclick="bajarAdjunto(\''+t.id+'\','+i+')">'+esc(a.nombre)+'</button>').join(' · ')+'</p>' : '')+
       (t.conversacion ? '<details class="conv"><summary>ver conversación de WhatsApp</summary><pre>'+esc(t.conversacion)+'</pre></details>' : '')+
       '<div id="tr-notas-'+t.id+'"><p class="stat-sub" style="margin:4px 0 0;">'+(t.notas ? 'Notas: '+esc(t.notas) : '<em>Sin notas</em>')+'</p></div>'+
@@ -1228,8 +1328,9 @@ function renderTerrenos(){
         '<button class="edit-link" onclick="elegirAdjuntos(\''+t.id+'\')">agregar archivos</button>'+
         '<button class="edit-link" onclick="startEditNotasTerreno(\''+t.id+'\')">'+(t.notas?'editar notas':'agregar notas')+'</button>'+
         (t.en_pipeline ? '' : '<button class="edit-link" onclick="agregarTerrenoAPipeline(\''+t.id+'\')">agregar a pipeline</button>')+
+        '<button class="edit-link" onclick="pqAbrir(\'terreno\',\''+t.id+'\')">registrar pregunta</button>'+
         '<button class="del" onclick="deleteTerreno(\''+t.id+'\')">eliminar</button>'+
-      '</div>';
+      '</div><div id="pq-form-terreno-'+t.id+'"></div>';
     body.appendChild(div);
   });
 }
@@ -2501,6 +2602,549 @@ function descargarInventarioTxt(){
   const lista = terrenosFiltrados();
   if(!lista.length){ alert('No hay terrenos con estos filtros.'); return; }
   descargarArchivo(nombreArchivoTerrenos('txt').replace(/^terrenos/,'inventario'), '\uFEFF'+lista.map(vocTextoInventario).join('\n\n==========\n\n')+'\n', 'text/plain;charset=utf-8');
+}
+
+// ───────── Requerimientos (urbakasa.com/registro-requerimiento) ─────────
+const RQ_ETAPAS = ['Nuevo','Videollamada agendada','Brief firmado','En búsqueda','Propuestas enviadas','Cerrado','Hoy no'];
+const RQ_L = {
+  rol:{comprador:'Comprador',asesor:'Asesor'},
+  perfil:{empresa_opera:'Empresa que opera',desarrolladora:'Desarrolladora',agroindustria:'Agroindustria',inversionista:'Inversionista',persona_fisica:'Persona física'},
+  modalidad:{compra:'Compra',renta:'Renta',aportacion:'Aportación',sin_definir:'Sin definir'},
+  busca:{terreno:'Terreno',proyecto:'Proyecto ya estructurado'},
+  canal:{correo:'Correo',whatsapp:'WhatsApp'},
+  unidad:{total:'en total',por_ha:'por hectárea',por_m2:'por m²',mes_total:'al mes, en total',anio_ha:'por hectárea al año',mes_m2:'por m² al mes'},
+  agua:{si:'Sí la necesita',no:'No la necesita',no_se:'No sabe'},
+  uso_suelo:{si:'Sí',no:'No',no_se:'No sabe'},
+  cercania:{autopista:'Autopista',ferrocarril:'Ferrocarril',carga_pesada:'Ruta de carga pesada',aeropuerto:'Aeropuerto',zona_urbana:'Zona urbana',escuelas_servicios:'Escuelas y servicios',costa:'Costa',lago_presa:'Lago o presa',destino_turistico:'Destino turístico'},
+  descarta:{ejidal:'Ejidal',inundable:'Inundable',pendiente:'Con pendiente',sin_escritura:'Sin escritura',otro:'Otro'},
+  plazo:{menos_6:'Menos de 6 meses','6_12':'De 6 a 12 meses',mas_12:'Más de 12 meses',sin_fecha:'Sin fecha'}
+};
+let requerimientos = [];
+let requerimientosError = null;
+let crmConfig = {};
+let preguntas = [];
+function rqL(campo, v){
+  if(v===null||v===undefined||v==='') return '';
+  if(Array.isArray(v)) return v.map(x=>(RQ_L[campo]&&RQ_L[campo][x])||x).join(', ');
+  return (RQ_L[campo] && RQ_L[campo][v]) || v;
+}
+function rqTipoTxt(r){
+  const tipo = r.tipo && r.tipo!=='otro' ? trLabel('tipo', r.tipo) : 'Otro';
+  const sub = r.tipo==='otro' || r.proyecto_sub==='otro' ? (r.proyecto_otro||'') : (TR_SUBS[r.proyecto_sub]||'');
+  return (r.busca==='proyecto' ? 'Proyecto ' : 'Terreno ') + tipo.toLowerCase() + (sub ? ' · '+sub : '');
+}
+function rqSupTxt(r){
+  if(!r.sup_desde_ha) return '';
+  const n = x=>Number(x).toLocaleString('es-MX');
+  return r.sup_hasta_ha ? 'De '+n(r.sup_desde_ha)+' a '+n(r.sup_hasta_ha)+' ha' : 'Desde '+n(r.sup_desde_ha)+' ha';
+}
+function rqPresupuestoTxt(r){
+  if(r.modalidad==='aportacion') return 'Aportación (sin presupuesto)';
+  if(!r.presupuesto) return '';
+  return '$'+Number(r.presupuesto).toLocaleString('es-MX')+' '+(r.presupuesto_moneda||'MXN')+' '+rqL('unidad', r.presupuesto_unidad);
+}
+
+// Días hábiles (lunes a viernes, sin días de descanso obligatorio) desde la fecha de registro
+const RQ_FERIADOS = ['2026-01-01','2026-02-02','2026-03-16','2026-05-01','2026-09-16','2026-11-16','2026-12-25',
+                     '2027-01-01','2027-02-01','2027-03-15','2027-05-01','2027-09-16','2027-11-15','2027-12-25'];
+function diasHabiles(desdeIso){
+  const tz = { timeZone:'America/Mexico_City' };
+  const iso = d=>d.toLocaleDateString('en-CA', tz);
+  let d = new Date(desdeIso), hoy = iso(new Date()), n = 0, guard = 0;
+  let cur = iso(d);
+  while(cur < hoy && guard++ < 400){
+    d = new Date(d.getTime() + 864e5); cur = iso(d);
+    const wd = new Date(cur+'T12:00:00').getDay();
+    if(wd!==0 && wd!==6 && !RQ_FERIADOS.includes(cur)) n++;
+  }
+  return n;
+}
+
+// Ficha del requerimiento (WhatsApp: *negritas*)
+function fichaRequerimiento(r, conContacto){
+  const L = [];
+  const fila = (k,v)=>{ if(v!==null && v!==undefined && v!=='') L.push(k+': '+v); };
+  L.push('*Urbakasa · Requerimiento '+(r.folio||'')+'*');
+  L.push('Registrado el '+new Date(r.created_at).toLocaleDateString('es-MX',{ timeZone:'America/Mexico_City', day:'numeric', month:'long', year:'numeric' }));
+  if(conContacto){
+    L.push(''); L.push('*Contacto*');
+    L.push((r.nombre||'')+(r.empresa ? ' · '+r.empresa : '')+' — '+rqL('rol', r.rol)+(r.perfil ? ' ('+rqL('perfil', r.perfil)+')' : ''));
+    fila('Correo', r.correo); fila('WhatsApp', r.whatsapp ? trTel(r.whatsapp) : '');
+    fila('Medio preferido', rqL('canal', r.canal_preferido));
+  }
+  L.push(''); L.push('*Lo que busca*');
+  fila('Qué', rqTipoTxt(r));
+  fila('Modalidad', rqL('modalidad', r.modalidad));
+  fila('Descripción', r.descripcion);
+  fila('Ubicación', [r.municipio, r.estado].filter(Boolean).join(', '));
+  fila('Zonas que descarta', r.zonas_descarta);
+  fila('Superficie', rqSupTxt(r));
+  if(r.crecer!==null && r.crecer!==undefined) fila('Posibilidad de crecer', r.crecer ? 'Sí' : 'No');
+  fila('Presupuesto', rqPresupuestoTxt(r));
+  fila('Agua', rqL('agua', r.agua) + (r.agua_volumen_m3 ? ' · '+Number(r.agua_volumen_m3).toLocaleString('es-MX')+' m³ al año' : ''));
+  fila('Uso de suelo autorizado', rqL('uso_suelo', r.uso_suelo_req) + (r.uso_suelo_cual ? ' · '+r.uso_suelo_cual : ''));
+  fila('Energía', r.energia_carga);
+  fila('Cercanía a', rqL('cercania', r.cercania));
+  fila('Cultivo', r.cultivo);
+  fila('Altitud', r.altitud);
+  fila('Descarta', rqL('descarta', r.descarta) + (r.descarta_otro ? ' · '+r.descarta_otro : ''));
+  fila('Plazo', rqL('plazo', r.plazo));
+  if(r.confidencialidad) fila('Confidencialidad', 'Pidió confidencialidad');
+  if(r.documento_nombre) fila('Documento', r.documento_nombre);
+  return L.join('\n');
+}
+function rqMensajeWhatsApp(r){
+  const nom = (r.nombre||'').split(' ')[0];
+  return 'Hola'+(nom ? ' '+nom : '')+', recibimos tu requerimiento. Te comparto lo que registramos para que lo confirmes o lo corrijas:\n\n'+
+    fichaRequerimiento(r, false)+
+    '\n\nLo revisamos contra los terrenos que ya tenemos y te respondemos en un máximo de 2 días hábiles. Si tienes alguna pregunta, aquí estoy.';
+}
+function rqCorreo(r){
+  const nom = (r.nombre||'').split(' ')[0];
+  const asunto = 'Tu requerimiento '+(r.folio||'')+' · Urbakasa';
+  const cuerpo = 'Hola'+(nom ? ' '+nom : '')+':\n\nRecibimos tu requerimiento. Esto es lo que registramos, para que lo confirmes o lo corrijas:\n\n'+
+    fichaRequerimiento(r, false).replace(/\*/g,'')+
+    '\n\nLo revisamos contra los terrenos que ya tenemos y te respondemos en un máximo de 2 días hábiles.\n\nSaludos,\nJorge Cortés\nUrbakasa';
+  return { asunto, cuerpo, texto: 'Asunto: '+asunto+'\n\n'+cuerpo };
+}
+
+// ───────── Cruce terrenos ↔ requerimientos (solo interno) ─────────
+function tipoCambioUSD(){ const v = crmConfig.tipo_cambio_usd; return v && Number(v.valor||v) > 0 ? Number(v.valor||v) : null; }
+function normTxt(s){ return String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim(); }
+// Presupuesto del requerimiento convertido a MXN por hectárea (renta: por hectárea al año)
+function rqPresupuestoHa(r, sup){
+  if(!r.presupuesto) return null;
+  let v = Number(r.presupuesto);
+  if(r.presupuesto_moneda==='USD'){ const tc = tipoCambioUSD(); if(!tc) return undefined; v *= tc; }
+  switch(r.presupuesto_unidad){
+    case 'por_ha': case 'anio_ha': return v;
+    case 'por_m2': return v*10000;
+    case 'mes_m2': return v*10000*12;
+    case 'total': return sup ? v/sup : undefined;
+    case 'mes_total': return sup ? v*12/sup : undefined;
+  }
+  return null;
+}
+function cruce(t, r){
+  const duras = [], suaves = [];
+  // tipo y terreno/proyecto
+  if(r.tipo && t.tipo && r.tipo!=='otro' && t.tipo!=='otro' && r.tipo!==t.tipo) duras.push('tipo distinto');
+  if((r.busca||'terreno') !== (t.oferta||'terreno')) duras.push(r.busca==='proyecto' ? 'busca proyecto' : 'busca terreno');
+  // estado (el municipio se muestra, no filtra)
+  if(r.estado && t.estado && normTxt(r.estado)!==normTxt(t.estado)) duras.push('otro estado');
+  if(!t.estado) suaves.push('el terreno no tiene estado');
+  // superficie
+  const sup = Number(t.superficie_ha)||0;
+  if(!sup) suaves.push('falta la superficie');
+  else if(sup < Number(r.sup_desde_ha||0) || (r.sup_hasta_ha && sup > Number(r.sup_hasta_ha))) duras.push('superficie fuera de rango');
+  // modalidad ↔ disponibilidad
+  const disp = t.disponibilidad || '';
+  const mod = r.modalidad || 'sin_definir';
+  if(mod!=='sin_definir' && disp && disp!=='abierto'){
+    const ok = (mod==='compra' && (disp==='venta'||disp==='ambas')) || (mod==='renta' && (disp==='renta'||disp==='ambas')) || (mod==='aportacion' && disp==='aportacion');
+    if(!ok) duras.push('modalidad distinta');
+  }
+  if(!disp) suaves.push('falta la disponibilidad');
+  // presupuesto
+  if(mod!=='aportacion' && r.presupuesto){
+    const tope = rqPresupuestoHa(r, sup);
+    if(tope===undefined) suaves.push(r.presupuesto_moneda==='USD' && !tipoCambioUSD() ? 'falta el tipo de cambio' : 'falta la superficie para comparar el precio');
+    else if(tope){
+      if(!t.precio_ha) suaves.push('el terreno no tiene precio');
+      else if(Number(t.precio_ha) > tope*1.15) duras.push('precio arriba del presupuesto');
+      else if(Number(t.precio_ha) > tope) suaves.push('precio hasta 15 % arriba');
+    }
+  }
+  // agua
+  if(r.agua==='si'){
+    if(['sin_agua','temporal'].includes(t.agua)) duras.push('sin agua');
+    else if(!t.agua || t.agua==='no_se') suaves.push('agua: no sabe');
+  }
+  // descartes
+  const desc = r.descarta || [];
+  if(desc.includes('ejidal')){
+    if(t.regimen==='ejidal') duras.push('es ejidal');
+    else if(!t.regimen || t.regimen==='no_se') suaves.push('régimen: no sabe');
+  }
+  if(desc.includes('sin_escritura')){
+    if(t.regimen && t.regimen!=='escritura' && t.regimen!=='no_se') duras.push('no tiene escritura');
+    else if(!t.regimen || t.regimen==='no_se') { if(!suaves.includes('régimen: no sabe')) suaves.push('régimen: no sabe'); }
+  }
+  if(duras.length) return { grado:null, duras, suaves };
+  if(!suaves.length) return { grado:'todo', duras, suaves };
+  if(suaves.length===1) return { grado:'casi', duras, suaves };
+  return { grado:null, duras, suaves };
+}
+function cruceHTML(lista, tipoLista){
+  if(!lista.length) return '<p class="stat-sub" style="margin:4px 0;">Ninguno por ahora.</p>';
+  return lista.map(x=>{
+    const o = x.obj, c = x.c;
+    const chip = '<span class="tr-chip'+(c.grado==='todo'?' ok':'')+'" style="margin-left:0;margin-right:6px;">'+(c.grado==='todo'?'cumple todo':'cumple casi todo')+'</span>';
+    const nota = c.suaves.length ? ' <span style="color:var(--rust)">('+esc(c.suaves.join(', '))+')</span>' : '';
+    if(tipoLista==='terrenos'){
+      return '<p class="stat-sub" style="margin:3px 0;">'+chip+'<strong>'+esc(o.folio||'')+'</strong> · '+esc(trOfertaTipo(o))+' · '+esc([o.municipio,o.estado].filter(Boolean).join(', '))+
+        (o.superficie_ha ? ' · '+Number(o.superficie_ha).toLocaleString('es-MX')+' ha' : '')+(o.precio_ha ? ' · '+fmt(o.precio_ha)+'/ha' : '')+nota+'</p>';
+    }
+    return '<p class="stat-sub" style="margin:3px 0;">'+chip+'<strong>'+esc(o.folio||'')+'</strong> · '+esc(o.nombre||'')+(o.empresa?' ('+esc(o.empresa)+')':'')+' · '+esc(rqTipoTxt(o))+' · '+esc(rqSupTxt(o))+nota+'</p>';
+  }).join('');
+}
+function terrenosQueCoinciden(r){
+  return terrenos.map(t=>({ obj:t, c:cruce(t, r) })).filter(x=>x.c.grado && x.obj.etapa!=='Hoy no')
+    .sort((a,b)=>(a.c.grado==='todo'?0:1)-(b.c.grado==='todo'?0:1));
+}
+function requerimientosQueCumple(t){
+  return requerimientos.map(r=>({ obj:r, c:cruce(t, r) })).filter(x=>x.c.grado && !['Cerrado','Hoy no'].includes(x.obj.etapa))
+    .sort((a,b)=>(a.c.grado==='todo'?0:1)-(b.c.grado==='todo'?0:1));
+}
+async function guardarTipoCambio(){
+  const v = parseFloat(String(document.getElementById('rq-tc').value).replace(/[^\d.]/g,''));
+  if(!(v>0)){ alert('Escribe el tipo de cambio, por ejemplo 18.40'); return; }
+  const { error } = await client.from('crm_config').upsert({ clave:'tipo_cambio_usd', valor:{ valor:v, fecha:todayISO() }, updated_at:new Date().toISOString() });
+  if(error){ alert('No se pudo guardar el tipo de cambio: '+error.message); return; }
+  await loadAll(); renderAll();
+}
+
+// ───────── Pestaña ─────────
+function prepararFiltrosRq(){
+  const sel = document.getElementById('rf-etapa');
+  if(!sel.options.length) sel.innerHTML = '<option value="">Todas</option><option value="__activos">Activas (sin Cerrado ni «Hoy no»)</option>'+RQ_ETAPAS.map(e=>'<option>'+esc(e)+'</option>').join('');
+  const o = document.getElementById('rf-origen'), act = o.value;
+  o.innerHTML = '<option value="">Todos</option>'+[...new Set(requerimientos.map(r=>r.origen).filter(Boolean))].sort().map(x=>'<option'+(x===act?' selected':'')+'>'+esc(x)+'</option>').join('');
+}
+function requerimientosFiltrados(){
+  const g = id=>document.getElementById(id).value;
+  const q = normTxt(g('rf-buscar'));
+  return requerimientos.filter(r=>{
+    if(g('rf-tipo') && r.tipo!==g('rf-tipo')) return false;
+    if(g('rf-modalidad') && r.modalidad!==g('rf-modalidad')) return false;
+    if(g('rf-rol') && r.rol!==g('rf-rol')) return false;
+    if(g('rf-canal') && r.canal_preferido!==g('rf-canal')) return false;
+    if(g('rf-origen') && r.origen!==g('rf-origen')) return false;
+    const e = g('rf-etapa');
+    if(e==='__activos' && ['Cerrado','Hoy no'].includes(r.etapa)) return false;
+    if(e && e!=='__activos' && r.etapa!==e) return false;
+    if(q && !normTxt([r.folio,r.nombre,r.empresa,r.descripcion,r.municipio,r.estado,r.correo,r.whatsapp,r.notas,r.conversacion].join(' ')).includes(q)) return false;
+    return true;
+  });
+}
+function renderRequerimientos(){
+  if(!document.getElementById('panel-requerimientos')) return;
+  prepararFiltrosRq();
+  const nuevos = requerimientos.filter(r=>r.etapa==='Nuevo');
+  const vencidos = nuevos.filter(r=>diasHabiles(r.created_at)>=2).length;
+  document.getElementById('rq-badge').textContent = nuevos.length ? '('+nuevos.length+')' : '';
+  document.getElementById('rq-resumen').innerHTML =
+    '<div><p class="stat-label">Registrados</p><p class="stat-val">'+requerimientos.length+'</p></div>'+
+    '<div><p class="stat-label">En «Nuevo»</p><p class="stat-val">'+nuevos.length+'</p></div>'+
+    '<div><p class="stat-label">Con 2 días hábiles o más</p><p class="stat-val" style="'+(vencidos?'color:var(--rust)':'')+'">'+vencidos+'</p></div>';
+  const tc = tipoCambioUSD(); const tcIn = document.getElementById('rq-tc');
+  if(tc && document.activeElement!==tcIn) tcIn.value = tc;
+  const body = document.getElementById('rq-body'), empty = document.getElementById('rq-empty');
+  body.innerHTML = '';
+  if(requerimientosError){ empty.style.display='block'; empty.textContent = 'No se pudieron leer los requerimientos ('+requerimientosError+'). Revisa que ya corriste el SQL v2.5 en Supabase.'; return; }
+  const lista = requerimientosFiltrados();
+  document.getElementById('rf-conteo').textContent = lista.length===requerimientos.length ? 'Mostrando los '+lista.length+' registros' : 'Mostrando '+lista.length+' de '+requerimientos.length+' registros';
+  if(!lista.length){ empty.style.display='block'; empty.textContent = requerimientos.length ? 'Ningún requerimiento coincide con estos filtros.' : 'Aún no hay requerimientos registrados.'; return; }
+  empty.style.display='none';
+  lista.forEach(r=>{
+    const div = document.createElement('div'); div.className = 'aviso-item';
+    const dh = r.etapa==='Nuevo' ? diasHabiles(r.created_at) : null;
+    const chips = '<span class="tr-chip'+(r.etapa==='Nuevo'?' nuevo':'')+'">'+esc(r.etapa)+'</span>'+
+      '<span class="tr-chip">'+(r.canal_preferido==='correo'?'prefiere correo':'prefiere WhatsApp')+'</span>'+
+      (r.confidencialidad ? '<span class="tr-chip" style="background:rgba(156,62,40,.15);color:var(--rust)">confidencial</span>' : '')+
+      (r.rol==='asesor' ? '<span class="tr-chip">asesor</span>' : '')+
+      (dh!==null ? '<span class="tr-chip" style="'+(dh>=2?'background:rgba(156,62,40,.15);color:var(--rust)':'')+'">'+dh+' día'+(dh===1?'':'s')+' hábil'+(dh===1?'':'es')+' en Nuevo</span>' : '');
+    const contacto = [r.correo ? '<a href="mailto:'+esc(r.correo)+'" style="color:var(--moss)">'+esc(r.correo)+'</a>' : '',
+      r.whatsapp ? '<a href="https://wa.me/52'+esc(r.whatsapp)+'" target="_blank" rel="noopener" style="color:var(--moss)">WhatsApp '+esc(trTel(r.whatsapp))+'</a>' : ''].filter(Boolean).join(' · ');
+    const etapaSel = '<select onchange="rqEtapa(\''+r.id+'\', this.value)">'+RQ_ETAPAS.map(e=>'<option'+(e===r.etapa?' selected':'')+'>'+esc(e)+'</option>').join('')+'</select>';
+    const coinc = terrenosQueCoinciden(r);
+    const detalle = fichaRequerimiento(r, true).replace(/\*/g,'').split('\n').slice(2).join('\n').trim();
+    div.innerHTML =
+      '<p style="margin:0 0 2px;"><span class="tr-folio">'+esc(r.folio||'sin folio')+'</span>'+chips+'</p>'+
+      '<p style="margin:0;"><span class="aviso-fecha">'+esc(trFecha(r.created_at))+' · '+esc(rqL('modalidad',r.modalidad))+' · '+esc(trLabel('tipo',r.tipo)||'sin tipo')+(r.origen?' · origen: '+esc(r.origen):'')+
+        (r.aviso_version && r.aviso_version.startsWith('captura') ? ' · capturado por Urbakasa' : '')+'</span></p>'+
+      '<p style="margin:6px 0 2px;"><strong>'+esc(r.nombre)+'</strong>'+(r.empresa?' · '+esc(r.empresa):'')+' — '+esc(rqL('rol',r.rol)||'sin rol')+(contacto?' · '+contacto:'')+'</p>'+
+      '<p class="stat-sub" style="margin:2px 0;color:var(--ink);">'+esc(rqTipoTxt(r))+'</p>'+
+      '<p class="stat-sub" style="margin:2px 0;">'+esc([[r.municipio,r.estado].filter(Boolean).join(', '), rqSupTxt(r), rqL('plazo',r.plazo)].filter(Boolean).join(' · '))+'</p>'+
+      (rqPresupuestoTxt(r) ? '<p class="stat-sub" style="margin:2px 0;color:var(--brass);">'+esc(rqPresupuestoTxt(r))+'</p>' : '')+
+      '<details class="conv"><summary>ver todo el requerimiento</summary><pre>'+esc(detalle)+'</pre></details>'+
+      '<details class="conv"'+(coinc.length?' open':'')+'><summary>terrenos que coinciden ('+coinc.length+')</summary>'+cruceHTML(coinc,'terrenos')+'</details>'+
+      (r.conversacion ? '<details class="conv"><summary>ver conversación</summary><pre>'+esc(r.conversacion)+'</pre></details>' : '')+
+      pqResumenRegistro('requerimiento', r.id)+
+      '<div id="rq-notas-'+r.id+'"><p class="stat-sub" style="margin:4px 0 0;">'+(r.notas ? 'Notas: '+esc(r.notas) : '<em>Sin notas</em>')+'</p></div>'+
+      '<div class="tr-acciones">'+etapaSel+
+        '<button class="edit-link tr-copiar" id="rq-wa-'+r.id+'" onclick="rqCopiar(\''+r.id+'\',\'wa\')">copiar mensaje para WhatsApp</button>'+
+        '<button class="edit-link tr-copiar" id="rq-mail-'+r.id+'" onclick="rqCopiar(\''+r.id+'\',\'correo\')">copiar correo</button>'+
+        (r.correo ? '<button class="edit-link" onclick="rqAbrirCorreo(\''+r.id+'\')">abrir en Mail</button>' : '')+
+        (r.documento_path ? '<button class="edit-link" onclick="rqDocumento(\''+r.id+'\')">descargar documento</button>' : '')+
+        '<button class="edit-link" onclick="rqEditar(\''+r.id+'\')">editar datos</button>'+
+        '<button class="edit-link" onclick="rqNotas(\''+r.id+'\')">'+(r.notas?'editar notas':'agregar notas')+'</button>'+
+        '<button class="edit-link" onclick="pqAbrir(\'requerimiento\',\''+r.id+'\')">registrar pregunta</button>'+
+        '<button class="edit-link" onclick="rqCopiar(\''+r.id+'\',\'todo\')">copiar todo</button>'+
+        '<button class="del" onclick="rqEliminar(\''+r.id+'\')">eliminar</button>'+
+      '</div><div id="pq-form-requerimiento-'+r.id+'"></div>';
+    body.appendChild(div);
+  });
+}
+async function rqEtapa(id, etapa){
+  const { error } = await client.from('requerimientos').update({ etapa }).eq('id', id);
+  if(error) alert('No se pudo cambiar la etapa: '+error.message);
+  await loadAll(); renderAll();
+}
+async function rqCopiar(id, que){
+  const r = requerimientos.find(x=>x.id===id);
+  const txt = que==='wa' ? rqMensajeWhatsApp(r) : (que==='correo' ? rqCorreo(r).texto : fichaRequerimiento(r, true).replace(/\*/g,'')+(r.notas?'\n\nNotas: '+r.notas:'')+(r.conversacion?'\n\nConversación:\n'+r.conversacion:''));
+  const ok = await copiarTexto(txt);
+  const btn = document.getElementById(que==='wa'?'rq-wa-'+id:(que==='correo'?'rq-mail-'+id:'')); if(btn){ const a = btn.textContent; btn.textContent = ok?'¡copiado!':'no se pudo copiar'; setTimeout(()=>btn.textContent=a,1600); }
+  else if(!ok) alert('No se pudo copiar.');
+}
+function rqAbrirCorreo(id){
+  const r = requerimientos.find(x=>x.id===id), c = rqCorreo(r);
+  window.location.href = 'mailto:'+encodeURIComponent(r.correo)+'?subject='+encodeURIComponent(c.asunto)+'&body='+encodeURIComponent(c.cuerpo);
+}
+async function rqDocumento(id){
+  const r = requerimientos.find(x=>x.id===id);
+  const { data, error } = await client.storage.from('requerimientos').createSignedUrl(r.documento_path, 300, { download: (r.folio||'')+'_'+(r.documento_nombre||'requerimiento') });
+  if(error || !data){ alert('No se pudo descargar: '+(error?error.message:'sin respuesta')); return; }
+  window.location.href = data.signedUrl;
+}
+function rqNotas(id){
+  const r = requerimientos.find(x=>x.id===id), box = document.getElementById('rq-notas-'+id);
+  box.innerHTML = '<textarea id="rq-notas-in-'+id+'" style="margin-top:6px;">'+esc(r.notas||'')+'</textarea><button class="edit-link" onclick="rqGuardarNotas(\''+id+'\')">guardar notas</button>';
+}
+async function rqGuardarNotas(id){
+  const v = document.getElementById('rq-notas-in-'+id).value.trim();
+  const { error } = await client.from('requerimientos').update({ notas: v || null }).eq('id', id);
+  if(error){ alert('No se pudieron guardar las notas: '+error.message); return; }
+  await loadAll(); renderAll();
+}
+async function rqEliminar(id){
+  const r = requerimientos.find(x=>x.id===id);
+  if(!confirm('¿Eliminar el requerimiento '+(r.folio||'')+'? Se borra también su documento. No se puede deshacer.')) return;
+  if(r.documento_path) await client.storage.from('requerimientos').remove([r.documento_path]);
+  const { error } = await client.from('requerimientos').delete().eq('id', id);
+  if(error) alert('No se pudo eliminar: '+error.message);
+  await loadAll(); renderAll();
+}
+
+// ───────── Registro y edición manual (WhatsApp o correo) ─────────
+let rqEditId = null, rqArchivo = null;
+function rqToggle(){
+  const c = document.getElementById('rq-card'); const ver = c.style.display==='none';
+  c.style.display = ver ? 'block' : 'none';
+  if(ver){ rqPrepararForm(); if(!rqEditId) rqLimpiar(); }
+}
+function rqPrepararForm(){
+  const est = document.getElementById('rqm-estado');
+  if(!est.options.length) est.innerHTML = '<option value="">Sin dato</option>'+MR_ESTADOS.map(e=>'<option>'+esc(e)+'</option>').join('');
+  const cer = document.getElementById('rqm-cercania');
+  if(!cer.innerHTML) cer.innerHTML = Object.entries(RQ_L.cercania).map(([k,v])=>'<label class="check-crm" style="display:inline-flex;margin-right:12px;"><input type="checkbox" value="'+k+'"> '+esc(v)+'</label>').join('');
+  const des = document.getElementById('rqm-descarta');
+  if(!des.innerHTML) des.innerHTML = Object.entries(RQ_L.descarta).map(([k,v])=>'<label class="check-crm" style="display:inline-flex;margin-right:12px;"><input type="checkbox" value="'+k+'"> '+esc(v)+'</label>').join('');
+  rqSubs();
+}
+function rqSubs(){
+  const tipo = document.getElementById('rqm-tipo').value, sel = document.getElementById('rqm-sub'), act = sel.value;
+  const subs = { agricola:['huerta_aguacate','huerta_berries','plantacion_agave','huerta_citricos','invernadero'], industrial:['parque_industrial','nave_industrial','centro_logistico','agroindustria'],
+    habitacional:['fracc_trunco','fracc_permisos','desarrollo_vertical','lotes_urbanizados'], turistico:['hotel','residencial_turistico','ecoturistico'] }[tipo] || [];
+  sel.innerHTML = '<option value="">Sin dato</option>'+subs.map(s=>'<option value="'+s+'"'+(s===act?' selected':'')+'>'+esc(TR_SUBS[s])+'</option>').join('')+'<option value="otro"'+(act==='otro'?' selected':'')+'>Otro</option>';
+}
+const RQM_CAMPOS = ['nombre','empresa','correo','whatsapp','canal','rol','perfil','modalidad','busca','tipo','sub','otro','descripcion','estado','municipio','zonas','desde','hasta','crecer','presupuesto','moneda','unidad','agua','aguavol','uso','usocual','energia','cultivo','altitud','descartaotro','plazo','notas','texto','captura'];
+function rqLimpiar(){
+  RQM_CAMPOS.forEach(k=>{ const e = document.getElementById('rqm-'+k); if(!e) return; if(e.tagName==='SELECT') e.selectedIndex = 0; else e.value=''; e.classList.remove('auto'); });
+  document.querySelectorAll('#rqm-cercania input, #rqm-descarta input').forEach(i=>i.checked=false);
+  ['rqm-conf','rqm-repr'].forEach(id=>document.getElementById(id).checked=false);
+  rqArchivo = null; document.getElementById('rqm-doc').value=''; document.getElementById('rqm-msg').textContent='';
+  document.getElementById('rqm-resumen').style.display='none';
+}
+function rqMarcar(id, v){
+  if(v===null||v===undefined||v==='') return false;
+  const e = document.getElementById(id); if(!e) return false;
+  if(e.tagName==='SELECT' && ![...e.options].some(o=>o.value===String(v))) return false;
+  e.value = v; e.classList.add('auto'); return true;
+}
+// Lectura de conversación: usa el lector de Terrenos y agrega lo propio de un requerimiento
+function rqLeer(){
+  const texto = document.getElementById('rqm-texto').value;
+  if(!texto.trim()){ alert('Pega primero la conversación o el correo.'); return; }
+  const L = PC.leer(texto), c = L.campos, t = normTxt(L.conversacion || texto), crudo = L.conversacion || texto;
+  const ll = [];
+  const p = (k, id, v)=>{ if(rqMarcar(id, v)) ll.push(k); };
+  p('nombre','rqm-nombre',c.nombre); p('WhatsApp','rqm-whatsapp',c.whatsapp);
+  const mail = crudo.match(/[\w.+-]+@[\w-]+\.[\w.-]+/); if(mail) p('correo','rqm-correo',mail[0].toLowerCase());
+  p('tipo','rqm-tipo',c.tipo); rqSubs(); if(c.sub) p('tipo de proyecto','rqm-sub',c.sub);
+  if(c.oferta==='proyecto') p('busca','rqm-busca','proyecto');
+  p('estado','rqm-estado',c.estado); p('municipio','rqm-municipio',c.municipio);
+  // superficie: "de 50 a 120 ha", "entre 20 y 40 hectáreas", "mínimo 30 ha"
+  const rango = t.match(/(?:de|entre)\s*(\d[\d,.]*)\s*(?:ha|has|hectareas)?\s*(?:a|y|-)\s*(\d[\d,.]*)\s*(?:ha\b|has\b|hectareas)/);
+  if(rango){ p('superficie','rqm-desde',parseFloat(rango[1].replace(/,/g,''))); p('superficie hasta','rqm-hasta',parseFloat(rango[2].replace(/,/g,''))); }
+  else if(c.superficie) p('superficie','rqm-desde',c.superficie);
+  // modalidad
+  if(/\b(aportacion|coinversion|asociarnos|socio)\b/.test(t)) p('modalidad','rqm-modalidad','aportacion');
+  else if(/\b(rentar|renta|arrendar|arrendamiento)\b/.test(t)) p('modalidad','rqm-modalidad','renta');
+  else if(/\b(comprar|compra|adquirir)\b/.test(t)) p('modalidad','rqm-modalidad','compra');
+  // rol
+  if(/\b(mi cliente|un cliente|represento|asesor|broker|corredor)\b/.test(t)) p('rol','rqm-rol','asesor'); else p('rol','rqm-rol','comprador');
+  // presupuesto
+  const mus = /\b(usd|dolares|dlls|us\$)\b/.test(t);
+  const mp = t.match(/(?:presupuesto|hasta|pagar|invertir|maximo)\D{0,20}\$?\s*(\d[\d,.]*)\s*(millones|millon|mdp|mil|k)?/);
+  if(mp){
+    let v = parseFloat(mp[1].replace(/,/g,'')); const e = mp[2]||'';
+    if(/^mill|mdp/.test(e)) v*=1e6; else if(/^(mil|k)/.test(e)) v*=1e3;
+    if(v>0){ p('presupuesto','rqm-presupuesto',Math.round(v)); p('moneda','rqm-moneda',mus?'USD':'MXN');
+      const unidad = /por\s*(ha|hectarea)/.test(t.slice(mp.index, mp.index+80)) ? 'por_ha' : (/(m2|metro)/.test(t.slice(mp.index, mp.index+80)) ? 'por_m2' : 'total');
+      p('unidad','rqm-unidad',unidad); }
+  } else if(c.precio){ p('presupuesto','rqm-presupuesto',c.precio); p('unidad','rqm-unidad','por_ha'); p('moneda','rqm-moneda',mus?'USD':'MXN'); }
+  // agua y plazo
+  if(/\b(con agua|necesit\w* agua|pozo|riego|concesion)\b/.test(t)) p('agua','rqm-agua','si');
+  if(/\b(inmediat|urgente|este mes|ya mismo|lo antes posible)/.test(t) || /\b[1-5]\s*meses\b/.test(t)) p('plazo','rqm-plazo','menos_6');
+  else if(/\b(este ano|6 a 12|seis meses|un ano)\b/.test(t)) p('plazo','rqm-plazo','6_12');
+  // descartes
+  if(/\b(no ejid|sin ejid|nada ejidal|no queremos ejid)/.test(t)){ const i = document.querySelector('#rqm-descarta input[value=ejidal]'); if(i){ i.checked = true; ll.push('descarta ejidal'); } }
+  if(/\b(con escritura|escriturado|solo escritura|propiedad privada)\b/.test(t)){ const i = document.querySelector('#rqm-descarta input[value=sin_escritura]'); if(i){ i.checked = true; ll.push('descarta sin escritura'); } }
+  // cercanía
+  [['autopista',/autopista|carretera federal/],['ferrocarril',/ferrocarril|tren|espuela/],['aeropuerto',/aeropuerto/],['costa',/playa|costa|mar\b/],['lago_presa',/lago|presa/],['zona_urbana',/zona urbana|mancha urbana|ciudad/]]
+    .forEach(([k,re])=>{ if(re.test(t)){ const i = document.querySelector('#rqm-cercania input[value='+k+']'); if(i && !i.checked){ i.checked = true; ll.push('cercanía: '+RQ_L.cercania[k]); } } });
+  if(c.cultivo) p('cultivo','rqm-cultivo',c.cultivo);
+  if(!document.getElementById('rqm-descripcion').value){ const d = crudo.split('\n').map(x=>x.trim()).filter(x=>x.length>15)[0]; if(d) p('descripción','rqm-descripcion',d.slice(0,400)); }
+  if(mail && !c.whatsapp) p('medio','rqm-canal','correo'); else if(c.whatsapp) p('medio','rqm-canal','whatsapp');
+  const res = document.getElementById('rqm-resumen');
+  res.style.display='block';
+  res.innerHTML = ll.length ? 'Llené en dorado: <strong>'+esc(ll.join(', '))+'</strong>. Revisa todo antes de guardar.' : 'No encontré datos claros; llena los campos a mano.';
+}
+function rqLeerForm(){
+  const v = id=>document.getElementById('rqm-'+id).value.trim();
+  const num = x=>{ const n = parseFloat(String(x).replace(/[^\d.]/g,'')); return isNaN(n) ? null : n; };
+  const chk = id=>[...document.querySelectorAll('#rqm-'+id+' input:checked')].map(i=>i.value);
+  return {
+    nombre: v('nombre'), empresa: v('empresa')||null, correo: v('correo').toLowerCase()||null,
+    whatsapp: v('whatsapp').replace(/\D/g,'').slice(-10)||null, canal_preferido: v('canal')||null,
+    rol: v('rol')||null, representa_directo: v('rol')==='asesor' ? document.getElementById('rqm-repr').checked : null,
+    perfil: v('perfil')||null, modalidad: v('modalidad')||null, busca: v('busca')||'terreno', tipo: v('tipo')||null,
+    proyecto_sub: v('sub')||null, proyecto_otro: v('otro')||null, descripcion: v('descripcion')||null,
+    estado: v('estado')||null, municipio: v('municipio')||null, zonas_descarta: v('zonas')||null,
+    sup_desde_ha: num(v('desde')), sup_hasta_ha: num(v('hasta')),
+    crecer: v('crecer')==='' ? null : v('crecer')==='si',
+    presupuesto: v('modalidad')==='aportacion' ? null : (num(v('presupuesto')) ? Math.round(num(v('presupuesto'))) : null),
+    presupuesto_moneda: v('modalidad')==='aportacion' ? null : (v('moneda')||null),
+    presupuesto_unidad: v('modalidad')==='aportacion' ? null : (v('unidad')||null),
+    agua: v('agua')||null, agua_volumen_m3: num(v('aguavol')) ? Math.round(num(v('aguavol'))) : null,
+    uso_suelo_req: v('uso')||null, uso_suelo_cual: v('usocual')||null, energia_carga: v('energia')||null,
+    cercania: chk('cercania').length ? chk('cercania') : null, cultivo: v('cultivo')||null, altitud: v('altitud')||null,
+    descarta: chk('descarta').length ? chk('descarta') : null, descarta_otro: v('descartaotro')||null,
+    plazo: v('plazo')||null, confidencialidad: document.getElementById('rqm-conf').checked,
+    notas: v('notas')||null
+  };
+}
+async function rqSubirDocumento(id){
+  if(!rqArchivo) return null;
+  const ext = (rqArchivo.name.split('.').pop()||'').toLowerCase();
+  if(!['pdf','doc','docx','xls','xlsx'].includes(ext)) throw new Error('El documento debe ser PDF, Word o Excel.');
+  if(rqArchivo.size > 10*1024*1024) throw new Error('El documento pesa más de 10 MB.');
+  const path = id+'/requerimiento.'+ext;
+  const { error } = await client.storage.from('requerimientos').upload(path, rqArchivo, { upsert:true, contentType: rqArchivo.type || 'application/octet-stream' });
+  if(error) throw new Error('No se pudo subir el documento: '+error.message);
+  return { documento_path: path, documento_nombre: rqArchivo.name };
+}
+async function rqGuardar(){
+  const msg = document.getElementById('rqm-msg'), btn = document.getElementById('rqm-btn');
+  const d = rqLeerForm();
+  if(d.nombre.length < 2){ msg.style.color='var(--rust)'; msg.textContent = 'Falta el nombre.'; return; }
+  if(!d.correo && !d.whatsapp){ msg.style.color='var(--rust)'; msg.textContent = 'Escribe al menos un correo o un WhatsApp.'; return; }
+  if(d.sup_desde_ha && d.sup_hasta_ha && d.sup_hasta_ha <= d.sup_desde_ha){ msg.style.color='var(--rust)'; msg.textContent = '«Hasta» debe ser mayor que «Desde».'; return; }
+  btn.disabled = true; btn.textContent = 'Guardando…';
+  try{
+    if(rqEditId){
+      const doc = await rqSubirDocumento(rqEditId); if(doc) Object.assign(d, doc);
+      const { error } = await client.from('requerimientos').update(d).eq('id', rqEditId);
+      if(error) throw new Error(error.message);
+      msg.style.color='var(--moss)'; msg.textContent = 'Cambios guardados.';
+      rqEditId = null; document.getElementById('rqm-cancelar').style.display='none';
+    } else {
+      const id = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, ch=>{ const r = crypto.getRandomValues(new Uint8Array(1))[0] & 15; return (ch==='x' ? r : (r&3|8)).toString(16); });
+      const doc = await rqSubirDocumento(id); if(doc) Object.assign(d, doc);
+      d.id = id; d.captura = document.getElementById('rqm-captura').value; d.origen = d.captura;
+      d.conversacion = document.getElementById('rqm-texto').value.trim() || null;
+      const { data, error } = await client.rpc('registrar_requerimiento_admin', { p: d });
+      if(error) throw new Error(error.message);
+      msg.style.color='var(--moss)'; msg.textContent = 'Registrado con el folio '+data+'.';
+    }
+    rqLimpiar(); document.getElementById('rq-card').style.display='none';
+    await loadAll(); renderAll();
+  }catch(e){ msg.style.color='var(--rust)'; msg.textContent = e.message; }
+  finally{ btn.disabled = false; btn.textContent = rqEditId ? 'Guardar cambios' : 'Registrar y asignar folio'; }
+}
+function rqEditar(id){
+  const r = requerimientos.find(x=>x.id===id); rqEditId = id;
+  const c = document.getElementById('rq-card'); c.style.display='block'; rqPrepararForm(); rqLimpiar();
+  const set = (k, v)=>{ const e = document.getElementById('rqm-'+k); if(e && v!==null && v!==undefined) e.value = v; };
+  set('nombre',r.nombre); set('empresa',r.empresa); set('correo',r.correo); set('whatsapp',r.whatsapp); set('canal',r.canal_preferido);
+  set('rol',r.rol); set('perfil',r.perfil); set('modalidad',r.modalidad); set('busca',r.busca); set('tipo',r.tipo); rqSubs(); set('sub',r.proyecto_sub);
+  set('otro',r.proyecto_otro); set('descripcion',r.descripcion); set('estado',r.estado); set('municipio',r.municipio); set('zonas',r.zonas_descarta);
+  set('desde',r.sup_desde_ha); set('hasta',r.sup_hasta_ha); set('crecer', r.crecer===null||r.crecer===undefined ? '' : (r.crecer?'si':'no'));
+  set('presupuesto',r.presupuesto); set('moneda',r.presupuesto_moneda); set('unidad',r.presupuesto_unidad); set('agua',r.agua); set('aguavol',r.agua_volumen_m3);
+  set('uso',r.uso_suelo_req); set('usocual',r.uso_suelo_cual); set('energia',r.energia_carga); set('cultivo',r.cultivo); set('altitud',r.altitud);
+  set('descartaotro',r.descarta_otro); set('plazo',r.plazo); set('notas',r.notas);
+  (r.cercania||[]).forEach(k=>{ const i = document.querySelector('#rqm-cercania input[value='+k+']'); if(i) i.checked = true; });
+  (r.descarta||[]).forEach(k=>{ const i = document.querySelector('#rqm-descarta input[value='+k+']'); if(i) i.checked = true; });
+  document.getElementById('rqm-conf').checked = !!r.confidencialidad; document.getElementById('rqm-repr').checked = !!r.representa_directo;
+  document.getElementById('rqm-titulo').innerHTML = 'Editar requerimiento <em>'+esc(r.folio||'')+'</em>';
+  document.getElementById('rqm-btn').textContent = 'Guardar cambios';
+  document.getElementById('rqm-cancelar').style.display='inline-block';
+  document.getElementById('rqm-alta').style.display='none';
+  c.scrollIntoView({ behavior:'smooth', block:'start' });
+}
+function rqCancelar(){
+  rqEditId = null; rqLimpiar(); document.getElementById('rq-card').style.display='none';
+  document.getElementById('rqm-titulo').innerHTML = 'Registrar requerimiento recibido por <em>WhatsApp o correo</em>';
+  document.getElementById('rqm-btn').textContent = 'Registrar y asignar folio';
+  document.getElementById('rqm-cancelar').style.display='none'; document.getElementById('rqm-alta').style.display='block';
+}
+
+// ───────── Etiquetas de preguntas de clientes (uso interno) ─────────
+const PQ_ETIQUETAS = { agua:'Agua', energia:'Energía', uso_suelo:'Uso de suelo', precio:'Precio', documentos:'Documentos', ejido:'Ejido', plazo:'Plazo', renta_aportacion:'Renta o aportación', visita:'Visita', otro:'Otro' };
+function pqDelRegistro(fuente, id){ return preguntas.filter(q=>q.fuente===fuente && q.registro_id===id); }
+function pqResumenRegistro(fuente, id){
+  const qs = pqDelRegistro(fuente, id); if(!qs.length) return '';
+  return '<details class="conv"><summary>preguntas registradas ('+qs.length+')</summary><pre>'+esc(qs.map(q=>
+    new Date(q.created_at).toLocaleDateString('es-MX',{ timeZone:'America/Mexico_City' })+' · '+(q.etiquetas||[]).map(e=>PQ_ETIQUETAS[e]||e).join(', ')+
+    (q.tipo_pregunta ? ' · '+(q.tipo_pregunta==='caso_concreto'?'caso concreto':'¿cuánto cuesta?') : '')+(q.frase ? '\n  «'+q.frase+'»' : '')).join('\n'))+'</pre></details>';
+}
+function pqAbrir(fuente, id){
+  const box = document.getElementById('pq-form-'+fuente+'-'+id); if(!box) return;
+  if(box.innerHTML){ box.innerHTML=''; return; }
+  box.innerHTML = '<div class="mr-resumen" style="display:block;margin-top:8px;">'+
+    '<p class="stat-sub" style="margin:0 0 6px;"><strong>Pregunta del cliente</strong> (uso interno; nada se publica)</p>'+
+    '<div>'+Object.entries(PQ_ETIQUETAS).map(([k,v])=>'<label class="check-crm" style="display:inline-flex;margin-right:10px;"><input type="checkbox" value="'+k+'"> '+esc(v)+'</label>').join('')+'</div>'+
+    '<label style="margin-top:6px;">Tipo</label><select class="pq-tipo"><option value="">Sin marcar</option><option value="caso_concreto">Caso concreto</option><option value="cuanto_cuesta">¿Cuánto cuesta?</option></select>'+
+    '<label>Frase exacta del cliente</label><textarea class="pq-frase" placeholder="Cópiala tal como la escribió"></textarea>'+
+    '<button class="edit-link" onclick="pqGuardar(\''+fuente+'\',\''+id+'\')">guardar pregunta</button></div>';
+}
+async function pqGuardar(fuente, id){
+  const box = document.getElementById('pq-form-'+fuente+'-'+id);
+  const etiquetas = [...box.querySelectorAll('input:checked')].map(i=>i.value);
+  if(!etiquetas.length){ alert('Marca al menos una etiqueta.'); return; }
+  const reg = fuente==='terreno' ? terrenos.find(x=>x.id===id) : (fuente==='requerimiento' ? requerimientos.find(x=>x.id===id) : leadsWeb.find(x=>x.id===id));
+  const { error } = await client.from('preguntas_clientes').insert({ fuente, registro_id:id, folio:(reg&&reg.folio)||null, etiquetas,
+    tipo_pregunta: box.querySelector('.pq-tipo').value || null, frase: box.querySelector('.pq-frase').value.trim() || null });
+  if(error){ alert('No se pudo guardar la pregunta'+(/preguntas_clientes/.test(error.message)?' (falta correr el SQL v2.6)':'')+': '+error.message); return; }
+  await loadAll(); renderAll();
+}
+function renderPreguntasResumen(){
+  const box = document.getElementById('pq-resumen'); if(!box) return;
+  const sel = document.getElementById('pq-mes');
+  const meses = [...new Set(preguntas.map(q=>new Date(q.created_at).toLocaleDateString('en-CA',{ timeZone:'America/Mexico_City' }).slice(0,7)))].sort().reverse();
+  const actual = sel.value || meses[0] || todayISO().slice(0,7);
+  sel.innerHTML = (meses.length ? meses : [actual]).map(m=>'<option'+(m===actual?' selected':'')+'>'+m+'</option>').join('');
+  const del = preguntas.filter(q=>new Date(q.created_at).toLocaleDateString('en-CA',{ timeZone:'America/Mexico_City' }).startsWith(actual));
+  if(!del.length){ box.innerHTML = '<p class="stat-sub">Sin preguntas registradas en este mes.</p>'; return; }
+  const cuenta = {};
+  del.forEach(q=>(q.etiquetas||[]).forEach(e=>{ (cuenta[e] = cuenta[e] || { n:0, frases:[] }).n++; if(q.frase) cuenta[e].frases.push(q.frase); }));
+  const top = Object.entries(cuenta).sort((a,b)=>b[1].n-a[1].n).slice(0,5);
+  const cc = del.filter(q=>q.tipo_pregunta==='caso_concreto').length, cq = del.filter(q=>q.tipo_pregunta==='cuanto_cuesta').length;
+  box.innerHTML = '<p class="stat-sub">'+del.length+' preguntas · caso concreto: '+cc+' · ¿cuánto cuesta?: '+cq+'</p>'+
+    top.map(([e,v],i)=>'<p style="margin:8px 0 2px;"><strong>'+(i+1)+'. '+esc(PQ_ETIQUETAS[e]||e)+'</strong> · '+v.n+'</p>'+
+      v.frases.slice(0,5).map(f=>'<p class="stat-sub" style="margin:0 0 0 14px;">«'+esc(f)+'»</p>').join('')).join('');
 }
 
 // ───────── Descargar todo de un terreno: datos, seguimiento, conversación y archivos ─────────
