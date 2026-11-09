@@ -440,7 +440,7 @@
         <span style="display:flex;gap:8px;flex-wrap:wrap;">
           <button class="sort-dir-btn" onclick="descargarTerrenosExcel()">Descargar Excel (CSV)</button>
           <button class="sort-dir-btn" onclick="descargarFichasTxt()">Descargar fichas (TXT)</button>
-          <button class="sort-dir-btn" onclick="calcularVocacionFiltrados(this)">Calcular datos de vocación (los que faltan)</button>
+          <button class="sort-dir-btn" onclick="calcularVocacionFiltrados(this)">Calcular ubicación (los que faltan)</button>
           <button class="sort-dir-btn" onclick="descargarInventarioTxt()">TXT para inventario (todo)</button>
         </span>
       </div>
@@ -596,6 +596,14 @@ async function init(){
   document.getElementById('k-fecha').value = todayISO();
   await loadAll();
   renderAll();
+  autoUbicacion();
+}
+// Al abrir el CRM: calcula en segundo plano los terrenos con KMZ que aún no tienen ubicación
+async function autoUbicacion(){
+  try{ await geoMeta(); }catch(e){ return; }
+  const pend = terrenos.filter(t=>trArchivoTipo(t)==='kmz' && !t.ubicacion_calculada_at && !t.__ubIntento);
+  for(const t of pend){ t.__ubIntento = true; const r = await calcularUbicacionTerreno(t.id, true); if(r!==true) break; }
+  if(pend.length) renderTerrenos();
 }
 
 async function logout(){
@@ -1310,7 +1318,7 @@ function renderTerrenos(){
       '<p class="stat-sub" style="margin:2px 0;">'+(t.esquema ? 'Condiciones: '+esc(trCondiciones(t)) : '<span style="color:var(--rust)">Condiciones con Urbakasa pendientes</span>')+
         ' · '+(t.autoriza_presentacion ? 'autorizó presentarlo' : '<span style="color:var(--rust)">sin autorización de presentación</span>')+'</p>'+
       (detalle ? '<p class="stat-sub" style="margin:2px 0;">'+detalle+'</p>' : '')+
-      vocTarjetaHTML(t)+
+      vocTarjetaHTML(t)+ubTarjetaHTML(t)+
       (function(){ const rc = requerimientosQueCumple(t); return '<details class="conv"><summary>requerimientos que cumple ('+rc.length+')</summary>'+cruceHTML(rc,'requerimientos')+'</details>'; })()+
       pqResumenRegistro('terreno', t.id)+
       ((Array.isArray(t.archivos) && t.archivos.length) ? '<p class="stat-sub" style="margin:4px 0 0;">Archivos: '+t.archivos.map((a,i)=>'<button class="edit-link" style="display:inline;padding:0;" onclick="bajarAdjunto(\''+t.id+'\','+i+')">'+esc(a.nombre)+'</button>').join(' · ')+'</p>' : '')+
@@ -1321,7 +1329,7 @@ function renderTerrenos(){
         '<button class="edit-link" id="tr-ficha-'+t.id+'" onclick="copiarFicha(\''+t.id+'\', true)">solo ficha</button>'+
         (trArchivoTipo(t)==='kmz' ? '<button class="edit-link tr-copiar" onclick="verMapa(\''+t.id+'\')">ver en mapa</button>' : '')+
         (trArchivoTipo(t)==='cuadro' ? '<button class="edit-link tr-copiar" onclick="verCuadro(\''+t.id+'\')">ver cuadro</button>' : '')+kmz+
-        (trArchivoTipo(t)==='kmz' ? '<button class="edit-link tr-copiar" id="tr-voc-'+t.id+'" onclick="calcularVocacionTerreno(\''+t.id+'\')">'+(t.datos_vocacion ? 'recalcular datos de vocación' : 'calcular datos de vocación')+'</button>' : '')+
+        (trArchivoTipo(t)==='kmz' ? '<button class="edit-link tr-copiar" id="tr-voc-'+t.id+'" onclick="calcularUbicacionTerreno(\''+t.id+'\')">'+(t.ubicacion_calculada_at || t.datos_vocacion ? 'recalcular ubicación' : 'calcular ubicación')+'</button>' : '')+
         '<button class="edit-link" id="tr-inv-'+t.id+'" onclick="copiarInventario(\''+t.id+'\')">copiar para inventario</button>'+
         '<button class="edit-link" onclick="editarTerreno(\''+t.id+'\')">editar datos</button>'+
         '<button class="edit-link tr-copiar" id="tr-todo-'+t.id+'" onclick="descargarTodo(\''+t.id+'\')">descargar todo</button>'+
@@ -2158,6 +2166,8 @@ async function guardarRegistroManual(){
   await loadAll();
   document.getElementById('tf-buscar').value = data;
   renderAll();
+  const nuevo = terrenos.find(x=>x.folio===data);
+  if(nuevo && trArchivoTipo(nuevo)==='kmz'){ await calcularUbicacionTerreno(nuevo.id, true); renderTerrenos(); }
 }
 
 // ───────── Adjuntos en registros existentes ─────────
@@ -2425,11 +2435,12 @@ function vocVocaciones(t){
   if(t.tipo==='otro' || !t.tipo) return ['habitacional','industrial','agricola','turistico'];
   return [t.tipo].filter(v=>VOC_NOMBRES[v]);
 }
+// Rangos hacia /activos: menos de 5 km · 5 a 15 · 15 a 30 · más de 30
 function vocRangoKm(d){
-  if(d < 1) return 'menos de 1 km';
-  const cortes = [[3,'1 a 3 km'],[5,'3 a 5 km'],[10,'5 a 10 km'],[20,'10 a 20 km'],[50,'20 a 50 km']];
-  for(const [h,txt] of cortes) if(d < h) return txt;
-  return 'más de 50 km';
+  if(d < 5) return 'menos de 5 km';
+  if(d < 15) return '5 a 15 km';
+  if(d < 30) return '15 a 30 km';
+  return 'más de 30 km';
 }
 function vocRangoAlt(m){ const b = Math.max(0, Math.floor(m/500)*500); return 'Altitud '+b.toLocaleString('es-MX')+' a '+(b+500).toLocaleString('es-MX')+' m'; }
 function vocKm(d){ return d < 10 ? Math.round(d*10)/10 : Math.round(d); }
@@ -2531,13 +2542,13 @@ async function calcularVocacionTerreno(id, silencioso){
   }
 }
 async function calcularVocacionFiltrados(btn){
-  const lista = terrenosFiltrados().filter(t=>trArchivoTipo(t)==='kmz' && !t.datos_vocacion);
-  if(!lista.length){ alert('Todos los terrenos con KMZ de esta lista ya tienen sus datos de vocación.'); return; }
+  const lista = terrenosFiltrados().filter(t=>trArchivoTipo(t)==='kmz' && (!t.datos_vocacion || !t.ubicacion_calculada_at));
+  if(!lista.length){ alert('Todos los terrenos con KMZ de esta lista ya tienen su ubicación calculada.'); return; }
   const antes = btn.textContent; btn.disabled = true;
   const fallas = [];
   for(let i=0;i<lista.length;i++){
     btn.textContent = 'calculando '+(i+1)+' de '+lista.length+'…';
-    const r = await calcularVocacionTerreno(lista[i].id, true);
+    const r = await calcularUbicacionTerreno(lista[i].id, true);
     if(r!==true) fallas.push((lista[i].folio||lista[i].id)+': '+r);
   }
   btn.textContent = antes; btn.disabled = false;
@@ -2589,6 +2600,7 @@ function vocTextoInventario(t){
   const L = ['Folio '+(t.folio||'')];
   if(dest.length) dest.forEach(([v,txt])=>L.push(VOC_NOMBRES[v]+': '+txt));
   else L.push('Datos por vocación: sin calcular');
+  ubLineasActivos(t).forEach(x=>L.push(x));
   L.push('');
   L.push(informacionCompleta(t));
   return L.join('\n');
@@ -3147,6 +3159,104 @@ function renderPreguntasResumen(){
       v.frases.slice(0,5).map(f=>'<p class="stat-sub" style="margin:0 0 0 14px;">«'+esc(f)+'»</p>').join('')).join('');
 }
 
+// ───────── Datos de ubicación desde el KMZ (en línea recta, sobre el contorno) ─────────
+// Carretera federal o autopista, camino colindante, vía férrea, aeropuerto, cabecera municipal y ciudad de 100 mil o más.
+// Solo ubicación y entorno: nada que sea contenido del DVT.
+const UB_NOTA = 'en línea recta, calculada sobre el contorno del KMZ';
+async function calcularUbicacionDatos(t, polis){
+  const meta = await geoMeta();
+  const T = vocTerreno(polis);
+  const hoy = new Date().toISOString().slice(0,10);
+  const fuente = capa=>{ const c = geoCapa(meta, capa); return c ? { fuente: c.fuente, edicion: c.edicion||'', fecha: hoy } : null; };
+  const km = d=>isFinite(d) ? Math.round(d*100)/100 : null;
+  const out = {}, fuentes = {};
+  const car = await vocCercano(T, 'car', { maxR: 2 });
+  if(!car.falta){ out.dist_carretera_km = km(car.d); out.carretera_nombre = isFinite(car.d) ? (car.nombre || 'Carretera federal o autopista sin nombre') : null; fuentes.carretera = fuente('car'); }
+  const cam = await vocCercano(T, 'cam', { maxR: 1 });
+  if(!cam.falta){ out.colinda_camino = isFinite(cam.d) && cam.d <= 0.05; fuentes.camino = fuente('cam'); }
+  const fc = await vocCercano(T, 'fc', { maxR: 3 });
+  if(!fc.falta){ out.dist_ferrocarril_km = km(fc.d); fuentes.ferrocarril = fuente('fc'); }
+  const ae = await vocPuntosArchivo(T, 'aero.json');
+  if(!ae.falta){ out.dist_aeropuerto_km = km(ae.d); out.aeropuerto_nombre = ae.nombre || null; fuentes.aeropuerto = fuente('aero'); }
+  const cab = await vocCercano(T, 'cab', { maxR: 2 });
+  if(!cab.falta){ out.dist_cabecera_km = km(cab.d); out.cabecera_nombre = isFinite(cab.d) ? (cab.nombre + (cab.sub && cab.sub!==cab.nombre ? ' (municipio de '+cab.sub+')' : '')) : null; fuentes.cabecera = fuente('cab'); }
+  const ciu = await vocCercano(T, 'ciu', { maxR: 5 });
+  if(!ciu.falta){ out.dist_ciudad_km = km(ciu.d); out.ciudad_nombre = isFinite(ciu.d) ? ciu.nombre : null; fuentes.ciudad = fuente('ciu'); }
+  out.ubicacion_fuentes = fuentes;
+  out.ubicacion_calculada_at = new Date().toISOString();
+  return out;
+}
+// Calcula ubicación y datos por vocación juntos, y guarda. Devuelve true o el mensaje de error.
+async function calcularUbicacionTerreno(id, silencioso){
+  const t = terrenos.find(x=>x.id===id);
+  const btn = document.getElementById('tr-voc-'+id), antes = btn ? btn.textContent : '';
+  try{
+    if(btn){ btn.textContent = 'calculando…'; btn.disabled = true; }
+    if(trArchivoTipo(t)==='cuadro') throw new Error('Con cuadro de construcción queda pendiente: se calcula cuando el terreno tenga KMZ.');
+    if(trArchivoTipo(t)!=='kmz') throw new Error('Se necesita el KMZ del terreno.');
+    const polis = await contornoTerreno(t);
+    if(!polis) throw new Error('El KMZ no trae un contorno cerrado.');
+    const dv = await calcularVocacion(t, polis);
+    const ub = await calcularUbicacionDatos(t, polis);
+    let cambios = Object.assign({ datos_vocacion: dv }, ub);
+    let { error } = await client.from('terrenos_captados').update(cambios).eq('id', id);
+    if(error && /column|schema cache/i.test(error.message)){
+      // si aún no se corre el SQL v2.6, guarda al menos los datos por vocación
+      ({ error } = await client.from('terrenos_captados').update({ datos_vocacion: dv }).eq('id', id));
+      if(!error){ Object.assign(t, { datos_vocacion: dv }); if(!silencioso) renderTerrenos(); throw new Error('Se guardaron los datos por vocación, pero falta correr el SQL v2.6 para guardar carretera, aeropuerto y ciudad.'); }
+    }
+    if(error) throw new Error(/datos_vocacion/.test(error.message) ? 'Falta correr el SQL v2.4 (columna datos_vocacion) en Supabase.' : error.message);
+    Object.assign(t, cambios);
+    if(!silencioso) renderTerrenos();
+    return true;
+  }catch(e){
+    if(!silencioso) alert('Ubicación: '+e.message);
+    return e.message;
+  }finally{
+    if(btn){ btn.textContent = antes; btn.disabled = false; }
+  }
+}
+// Rango para /activos
+function ubRango(d){ if(d===null||d===undefined||!isFinite(d)) return ''; if(d<5) return 'menos de 5 km'; if(d<15) return '5 a 15 km'; if(d<30) return '15 a 30 km'; return 'más de 30 km'; }
+function ubKm1(d){ return (d===null||d===undefined) ? '' : Number(d).toLocaleString('es-MX', { minimumFractionDigits:1, maximumFractionDigits:1 })+' km'; }
+function ubKmExacto(d){ return (d===null||d===undefined) ? '' : Number(d).toLocaleString('es-MX', { minimumFractionDigits:2, maximumFractionDigits:2 })+' km'; }
+function ubFuente(t, k){ const f = (t.ubicacion_fuentes||{})[k]; return f ? f.fuente+(f.edicion?' · '+f.edicion:'')+(f.fecha?' · '+f.fecha:'') : ''; }
+function ubFilas(t, exacto){
+  const k = exacto ? ubKmExacto : ubKm1, F = [];
+  const f = (dato, valor, clave)=>{ if(valor) F.push([dato, valor, ubFuente(t, clave)]); };
+  if(t.dist_carretera_km!==null && t.dist_carretera_km!==undefined) f('Autopista o carretera federal más cercana', k(t.dist_carretera_km)+(t.carretera_nombre?' · '+t.carretera_nombre:''), 'carretera');
+  if(t.colinda_camino!==null && t.colinda_camino!==undefined) f('Colinda con un camino registrado (a menos de 50 m)', t.colinda_camino ? 'Sí' : 'No', 'camino');
+  if(t.dist_ferrocarril_km!==null && t.dist_ferrocarril_km!==undefined) f('Vía férrea más cercana', k(t.dist_ferrocarril_km), 'ferrocarril');
+  if(t.dist_aeropuerto_km!==null && t.dist_aeropuerto_km!==undefined) f('Aeropuerto más cercano', k(t.dist_aeropuerto_km)+(t.aeropuerto_nombre?' · '+t.aeropuerto_nombre:''), 'aeropuerto');
+  if(t.dist_cabecera_km!==null && t.dist_cabecera_km!==undefined) f('Cabecera municipal más cercana', k(t.dist_cabecera_km)+(t.cabecera_nombre?' · '+t.cabecera_nombre:''), 'cabecera');
+  if(t.dist_ciudad_km!==null && t.dist_ciudad_km!==undefined) f('Ciudad de más de 100 mil habitantes más cercana', k(t.dist_ciudad_km)+(t.ciudad_nombre?' · '+t.ciudad_nombre:''), 'ciudad');
+  return F;
+}
+function ubTarjetaHTML(t){
+  const F = ubFilas(t, false);
+  if(!F.length) return trArchivoTipo(t)==='cuadro' ? '<p class="stat-sub" style="margin:4px 0 0;">Ubicación: pendiente (cuadro de construcción sin KMZ)</p>' : '';
+  const fecha = t.ubicacion_calculada_at ? vocFecha(t.ubicacion_calculada_at) : '';
+  return '<details class="conv"><summary>ver datos de ubicación (calculados el '+esc(fecha)+')</summary><pre>'+
+    esc('Distancias '+UB_NOTA+'.\n'+F.map(([d,v,fu])=>'· '+d+': '+v+(fu?' — Fuente: '+fu:'')).join('\n'))+'</pre></details>';
+}
+function ubLineasFicha(t){
+  const F = ubFilas(t, true);
+  if(!F.length) return trArchivoTipo(t)==='cuadro' ? ['DATOS DE UBICACIÓN', 'Pendiente: el terreno tiene cuadro de construcción y aún no tiene KMZ.'] : [];
+  return ['DATOS DE UBICACIÓN (en línea recta, sobre el contorno del KMZ; calculados el '+vocFecha(t.ubicacion_calculada_at)+')']
+    .concat(F.map(([d,v,fu])=>'· '+d+': '+v+(fu?' — Fuente: '+fu:'')));
+}
+// Hacia /activos: solo rangos
+function ubLineasActivos(t){
+  const L = [];
+  if(t.dist_carretera_km!==null && t.dist_carretera_km!==undefined) L.push('Autopista o carretera federal: a '+ubRango(t.dist_carretera_km));
+  if(t.colinda_camino) L.push('Colinda con camino');
+  if(t.dist_ferrocarril_km!==null && t.dist_ferrocarril_km!==undefined) L.push('Vía férrea: a '+ubRango(t.dist_ferrocarril_km));
+  if(t.dist_aeropuerto_km!==null && t.dist_aeropuerto_km!==undefined) L.push('Aeropuerto: a '+ubRango(t.dist_aeropuerto_km));
+  if(t.dist_cabecera_km!==null && t.dist_cabecera_km!==undefined) L.push('Cabecera municipal: a '+ubRango(t.dist_cabecera_km));
+  if(t.dist_ciudad_km!==null && t.dist_ciudad_km!==undefined) L.push('Ciudad de más de 100 mil habitantes: a '+ubRango(t.dist_ciudad_km));
+  return L;
+}
+
 // ───────── Descargar todo de un terreno: datos, seguimiento, conversación y archivos ─────────
 function informacionCompleta(t){
   const L = [];
@@ -3158,6 +3268,8 @@ function informacionCompleta(t){
   L.push('Fecha de registro: ' + new Date(t.created_at).toLocaleString('es-MX',{ timeZone:'America/Mexico_City' }));
   const falt = faltantesTerreno(t);
   L.push('Pendiente para revisión: ' + (falt.length ? falt.join(' ') : 'nada, registro completo'));
+  const ubi = ubLineasFicha(t);
+  if(ubi.length){ L.push(''); ubi.forEach(x=>L.push(x)); }
   const voc = vocLineasFicha(t);
   if(voc.length){ L.push(''); voc.forEach(x=>L.push(x)); }
   L.push('');
@@ -3275,6 +3387,7 @@ document.getElementById('tr-kmz-input').addEventListener('change', async functio
   if(upd.error){ alert('El KMZ se subió, pero no se pudo marcar en el registro: '+upd.error.message); }
   await loadAll();
   renderAll();
+  if(!upd.error && tipoArch==='kmz'){ await calcularUbicacionTerreno(id, true); renderTerrenos(); }
 });
 
 async function descargarKMZ(id){
