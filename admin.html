@@ -344,7 +344,7 @@
       <label id="mr-texto-label">1 · Pega la conversación de WhatsApp o el texto del asesor</label>
       <textarea id="mr-texto" style="min-height:150px" placeholder="En WhatsApp: mantén presionado un mensaje → selecciona los demás → Copiar. Pégalo aquí completo; tus propios mensajes se ignoran."></textarea>
       <div id="mr-archivos-box">
-      <label>2 · Agrega los archivos que te mandó (KMZ, cuadro de construcción, fichas en PDF, fotos)</label>
+      <label>2 · Agrega los archivos que te mandó (KMZ, fichas en PDF, fotos)</label>
       <input type="file" id="mr-files" multiple onchange="mrAgregarArchivos(this)">
       <div id="mr-files-list" class="mr-files"></div>
       </div>
@@ -383,7 +383,7 @@
       </div>
       <label class="check-crm"><input type="checkbox" id="mr-aut"> El contacto autorizó presentar el terreno a clientes y en la Selección de Activos</label>
       <div id="mr-alta-box">
-      <label>Archivo de ubicación (el que vale como KMZ o cuadro de construcción)</label>
+      <label>KMZ del terreno</label>
       <select id="mr-principal"><option value="">Ninguno por ahora</option></select>
       <label>Notas</label>
       <textarea id="mr-notas" placeholder="Ej. Llegó por WhatsApp el 24 oct; corredor con exclusiva"></textarea>
@@ -408,6 +408,7 @@
           <option value="">Todo</option>
           <option value="terreno">Terrenos</option>
           <option value="proyecto">Proyectos</option>
+          <option value="bodega">Bodegas</option>
         </select>
         <label style="margin:0;">Etapa</label>
         <select id="tf-etapa" onchange="renderTerrenos()"></select>
@@ -416,8 +417,7 @@
           <option value="">Todos</option>
           <option value="recibido">Con archivo</option>
           <option value="kmz">KMZ</option>
-          <option value="cuadro">Cuadro de construcción</option>
-          <option value="pendiente">Falta KMZ o cuadro</option>
+          <option value="pendiente">Falta KMZ</option>
         </select>
         <label style="margin:0;">Condiciones</label>
         <select id="tf-cond" onchange="renderTerrenos()">
@@ -481,7 +481,7 @@
         <div><label>Rol</label><select id="rqm-rol"><option value="">Sin dato</option><option value="comprador">Comprador</option><option value="asesor">Asesor</option></select></div>
         <div><label>Perfil</label><select id="rqm-perfil"><option value="">Sin dato</option><option value="empresa_opera">Empresa que opera</option><option value="desarrolladora">Desarrolladora</option><option value="agroindustria">Agroindustria</option><option value="inversionista">Inversionista</option><option value="persona_fisica">Persona física</option></select></div>
         <div><label>Modalidad</label><select id="rqm-modalidad"><option value="">Sin dato</option><option value="compra">Compra</option><option value="renta">Renta</option><option value="aportacion">Aportación</option><option value="sin_definir">Sin definir</option></select></div>
-        <div><label>Busca</label><select id="rqm-busca"><option value="terreno">Terreno</option><option value="proyecto">Proyecto ya estructurado</option></select></div>
+        <div><label>Busca</label><select id="rqm-busca"><option value="terreno">Terreno</option><option value="proyecto">Proyecto ya estructurado</option><option value="bodega">Bodega industrial</option></select></div>
         <div><label>Tipo</label><select id="rqm-tipo" onchange="rqSubs()"><option value="">Sin dato</option><option value="agricola">Agrícola</option><option value="industrial">Industrial</option><option value="habitacional">Habitacional</option><option value="turistico">Turístico</option><option value="otro">Otro</option></select></div>
         <div><label>Tipo de proyecto</label><select id="rqm-sub"></select></div>
         <div><label>Otro (¿cuál?)</label><input id="rqm-otro" maxlength="160"></div>
@@ -547,7 +547,7 @@
       <div class="grid2">
         <div><label>2 · KMZ del activo (si lo tienes)</label><input type="file" id="act-kmz" onchange="actArchivo = this.files[0] || null"></div>
         <div><label>o ubicación de Google Maps (enlace o coordenadas)</label><input id="act-coords" placeholder="Ej. https://maps.app.goo.gl/… o 20.6736, -103.3440"></div>
-        <div><label>Tipo (si el texto no lo dice)</label><select id="act-tipo"><option value="">Leerlo del texto</option><option value="agricola">Agrícola</option><option value="industrial">Industrial</option><option value="habitacional">Habitacional</option><option value="turistico">Turístico</option><option value="otro">Otro (calcula todo)</option></select></div>
+        <div><label>Tipo (si el texto no lo dice)</label><select id="act-tipo"><option value="">Leerlo del texto</option><option value="agricola">Agrícola</option><option value="industrial">Industrial</option><option value="habitacional">Habitacional</option><option value="turistico">Turístico</option><option value="bodega">Bodega industrial</option><option value="otro">Otro (calcula todo)</option></select></div>
       </div>
       <p class="stat-sub" style="margin-top:6px;">Con KMZ se mide desde el contorno. Con Google Maps se mide desde un punto: sirve para los rangos, pero no se puede saber si colinda. Para copiar las coordenadas en Google Maps, mantén presionado el punto.</p>
       <button class="action" id="act-btn" onclick="actAnalizar()">Analizar</button>
@@ -1199,7 +1199,50 @@ const TR_SUBS = {
   hotel:'Hotel o proyecto hotelero', residencial_turistico:'Desarrollo residencial turístico', ecoturistico:'Parque ecoturístico'
 };
 function esProyecto(t){ return t.oferta==='proyecto'; }
-function trOferta(t){ return esProyecto(t) ? 'Proyecto' : 'Terreno'; }
+function esBodega(t){ return !!t && t.oferta==='bodega'; }
+function trOferta(t){ return esProyecto(t) ? 'Proyecto' : (esBodega(t) ? 'Bodega' : 'Terreno'); }
+function trPalabra(t){ return esProyecto(t) ? 'proyecto' : (esBodega(t) ? 'bodega' : 'terreno'); }
+// ───────── Bodegas industriales (registro v2.3 · SQL v2.9) ─────────
+const BOD_L = {
+  industria:{ ligera:'Ligera', mediana:'Mediana', pesada:'Pesada', no_se:'No sabe' },
+  uso_actual:{ almacen:'Almacén', manufactura:'Manufactura', refrigerada:'Refrigerada', desocupada:'Desocupada', otro:'Otro' },
+  antiguedad:{ menos_5:'Menos de 5 años', '5_15':'De 5 a 15 años', mas_15:'Más de 15 años', no_se:'No sabe' },
+  parque:{ indispensable:'Indispensable', preferencia:'De preferencia', no_importa:'No importa' },
+  agua:{ red_municipal:'Red municipal', pozo:'Pozo propio', parque:'Red del parque industrial', pipas:'Pipas', no_tiene:'No tiene', no_se:'No sabe' }
+};
+function bodL(campo, v){ return (BOD_L[campo] && BOD_L[campo][v]) || v || ''; }
+function bodN(n){ return (n===null||n===undefined||n==='') ? '' : Number(n).toLocaleString('es-MX', { maximumFractionDigits:2 }); }
+function bod(t){ return (t && t.bodega) || {}; }
+function bodPrecios(t){
+  const b = bod(t), mon = b.moneda || 'MXN', out = [];
+  if(b.precio_venta) out.push('Venta: $'+bodN(b.precio_venta)+' '+mon+(b.m2_construidos ? ' ($'+bodN(Math.round(b.precio_venta/b.m2_construidos))+' '+mon+' por m² construido)' : ''));
+  if(b.renta_m2_mes) out.push('Renta: $'+bodN(b.renta_m2_mes)+' '+mon+' por m² al mes'+(b.m2_construidos ? ' (≈ $'+bodN(Math.round(b.renta_m2_mes*b.m2_construidos))+' '+mon+' al mes)' : ''));
+  return out;
+}
+// Filas [dato, valor] de la bodega, en el orden de la página de registro
+function bodFilas(t){
+  const b = bod(t), F = [];
+  const f = (k, v)=>{ if(v!==null && v!==undefined && v!=='') F.push([k, v]); };
+  f('Parque industrial', b.en_parque===true ? 'Sí'+(b.parque_nombre ? ' · '+b.parque_nombre : '') : (b.en_parque===false ? 'No' : ''));
+  f('Superficie construida', b.m2_construidos ? bodN(b.m2_construidos)+' m²' : '');
+  f('Superficie del terreno', b.m2_terreno ? bodN(b.m2_terreno)+' m²' : '');
+  f('Altura libre', b.altura_m ? bodN(b.altura_m)+' m' : '');
+  f('Andenes', b.andenes!==undefined ? bodN(b.andenes) : '');
+  f('Rampas', b.rampas!==undefined ? bodN(b.rampas) : '');
+  f('Energía disponible', b.kva ? bodN(b.kva)+' kVA' : '');
+  f('Suministro de agua', bodL('agua', b.agua));
+  f('Oficinas', b.sin_oficinas ? 'No tiene' : (b.oficinas_m2 ? bodN(b.oficinas_m2)+' m²' : ''));
+  f('Tipo de industria permitida', bodL('industria', b.industria));
+  f('Uso actual', bodL('uso_actual', b.uso_actual));
+  f('Antigüedad', bodL('antiguedad', b.antiguedad));
+  return F;
+}
+function bodPlanos(t){ return (Array.isArray(t.archivos) ? t.archivos : []).filter(a=>a.tipo==='plano'); }
+function bodResumen(t){
+  const b = bod(t);
+  return [b.m2_construidos ? bodN(b.m2_construidos)+' m² construidos' : '', b.altura_m ? bodN(b.altura_m)+' m de altura libre' : '',
+          b.andenes!==undefined ? bodN(b.andenes)+' andenes' : '', b.industria ? 'industria '+bodL('industria', b.industria).toLowerCase() : ''].filter(Boolean).join(' · ');
+}
 // "Huerta de aguacate", "Otro: Planta de reciclaje" o el texto libre cuando el tipo es Otro
 function trProyectoSub(t){
   if(!esProyecto(t)) return '';
@@ -1208,6 +1251,7 @@ function trProyectoSub(t){
 }
 // Línea corta: "Terreno agrícola" / "Proyecto agrícola · Huerta de aguacate" / "Proyecto · Cementerio privado"
 function trOfertaTipo(t){
+  if(esBodega(t)){ const b = bod(t); return 'Bodega industrial' + (b.en_parque ? ' · en parque industrial'+(b.parque_nombre ? ' ('+b.parque_nombre+')' : '') : ''); }
   const tipo = t.tipo && t.tipo!=='otro' ? trLabel('tipo',t.tipo).toLowerCase() : '';
   const base = trOferta(t) + (tipo ? ' '+tipo : '');
   const sub = trProyectoSub(t);
@@ -1217,6 +1261,7 @@ function trOfertaTipo(t){
 function trPrecioUnidad(t){ return t.disponibilidad==='renta' ? ' MXN por ha al año' : ' MXN por ha'; }
 function trPrecioTotal(t){ return (t.precio_ha && t.superficie_ha) ? Number(t.precio_ha)*Number(t.superficie_ha) : null; }
 function trPrecio(t){
+  if(esBodega(t)){ const p = bodPrecios(t); return p.length ? p.join(' · ') : (t.precio_definido===false ? 'Precio sin definir' : ''); }
   if(t.precio_ha) return fmt(t.precio_ha)+trPrecioUnidad(t);
   if(t.precio_definido===false) return 'Precio sin definir';
   return '';
@@ -1229,6 +1274,7 @@ function trPrecioTotalTxt(t){
 function trArchivoTipo(t){ return t.kmz_path ? (t.archivo_tipo || (t.tiene_kmz ? 'kmz' : 'cuadro')) : ''; }
 function trArchivoTxt(t){
   const a = trArchivoTipo(t);
+  if(esBodega(t)){ const n = bodPlanos(t).length; return n ? n+(n===1?' plano recibido':' planos recibidos') : 'Sin planos'; }
   return a==='kmz' ? 'KMZ recibido' : (a==='cuadro' ? 'Cuadro de construcción recibido' : 'Pendiente');
 }
 const TR_EXT = { kmz:['kmz','kml'], cuadro:['pdf','jpg','jpeg','png','heic','heif','webp'] };
@@ -1285,7 +1331,7 @@ function renderTerrenos(){
   document.getElementById('terrenos-resumen').innerHTML =
     '<div><p class="stat-label">Registrados</p><p class="stat-val">'+terrenos.length+'</p></div>'+
     '<div><p class="stat-label">Sin revisar</p><p class="stat-val">'+nuevos+'</p></div>'+
-    '<div><p class="stat-label">Con KMZ o cuadro</p><p class="stat-val">'+terrenos.filter(t=>t.kmz_path).length+'</p></div>';
+    '<div><p class="stat-label">Con KMZ</p><p class="stat-val">'+terrenos.filter(t=>trArchivoTipo(t)==='kmz').length+'</p></div>';
   body.innerHTML = '';
 
   if(terrenosError){
@@ -1307,7 +1353,7 @@ function renderTerrenos(){
   lista.forEach(t=>{
     const div = document.createElement('div');
     div.className = 'aviso-item';
-    const chipOferta = esProyecto(t) ? '<span class="tr-chip">proyecto</span>' : '';
+    const chipOferta = esProyecto(t) ? '<span class="tr-chip">proyecto</span>' : (esBodega(t) ? '<span class="tr-chip">bodega</span>' : '');
     const chipEtapa = '<span class="tr-chip'+(t.etapa==='Nuevo'?' nuevo':(t.etapa==='Aplica requerimiento'||t.etapa==='DVT solicitado'?' ok':''))+'">'+esc(t.etapa)+'</span>';
     const linea1 = '<span class="tr-folio">'+esc(t.folio||'sin folio')+'</span>'+chipOferta+chipEtapa+
       (t.en_pipeline ? '<span class="tr-chip ok">en pipeline</span>' : '');
@@ -1315,14 +1361,18 @@ function renderTerrenos(){
       (t.origen ? ' · origen: '+esc(t.origen) : '')+'</span>';
     const wa = String(t.whatsapp||'').replace(/\D/g,'');
     const waLink = wa ? '<a href="https://wa.me/52'+esc(wa)+'" target="_blank" rel="noopener" style="color:var(--moss);">WhatsApp '+esc(trTel(wa))+'</a>' : '';
-    const sup = t.superficie_ha ? Number(t.superficie_ha).toLocaleString('es-MX')+' ha' : 'superficie no indicada';
+    const sup = esBodega(t) ? (bod(t).m2_construidos ? bodN(bod(t).m2_construidos)+' m² construidos' : 'superficie no indicada')
+      : (t.superficie_ha ? Number(t.superficie_ha).toLocaleString('es-MX')+' ha' : 'superficie no indicada');
     const base = [esc(t.municipio)+', '+esc(t.estado), sup, esc(trLabel('disponibilidad',t.disponibilidad)), esc(trLabel('regimen',t.regimen))].filter(Boolean).join(' · ');
     const precioTxt = trPrecio(t) ? esc(trPrecio(t)) + (trPrecioTotalTxt(t) ? ' · total aprox. '+esc(trPrecioTotalTxt(t)) : '') : '';
-    const detalle = trDetalle(t).map(esc).join(' · ');
-    const kmz = t.kmz_path
+    const detalle = (esBodega(t) ? bodFilas(t).filter(x=>x[0]!=='Superficie construida').map(x=>x[0]+': '+x[1]) : trDetalle(t)).map(esc).join(' · ');
+    const mapsLink = t.maps_url ? '<a class="edit-link" href="'+esc(t.maps_url)+'" target="_blank" rel="noopener">abrir Google Maps</a>' : '';
+    const kmz = esBodega(t) && !t.kmz_path
+      ? mapsLink + (bodPlanos(t).length ? '' : '<span class="tr-chip" style="margin:0;">faltan planos</span>') + '<button class="edit-link" onclick="elegirPlanos(\''+t.id+'\')">agregar planos</button>'
+      : t.kmz_path
       ? '<button class="edit-link" onclick="descargarKMZ(\''+t.id+'\')">descargar '+(trArchivoTipo(t)==='cuadro'?'cuadro':'KMZ')+'</button>'+
         '<button class="edit-link" id="tr-kmz-'+t.id+'" onclick="elegirKMZ(\''+t.id+'\')">reemplazar archivo</button>'
-      : '<span class="tr-chip" style="margin:0;">falta KMZ o cuadro</span>'+
+      : '<span class="tr-chip" style="margin:0;">falta KMZ</span>'+
         '<button class="edit-link" id="tr-kmz-'+t.id+'" onclick="elegirKMZ(\''+t.id+'\')">subir archivo</button>';
     const etapaSel = '<select onchange="updateEtapaTerreno(\''+t.id+'\', this.value)">'+
       TR_ETAPAS.map(e=>'<option'+(e===t.etapa?' selected':'')+'>'+esc(e)+'</option>').join('')+'</select>';
@@ -1348,9 +1398,10 @@ function renderTerrenos(){
         '<button class="edit-link" id="tr-ficha-'+t.id+'" onclick="copiarFicha(\''+t.id+'\', true)">solo ficha</button>'+
         (trArchivoTipo(t)==='kmz' ? '<button class="edit-link tr-copiar" onclick="verMapa(\''+t.id+'\')">ver en mapa</button>' : '')+
         (trArchivoTipo(t)==='cuadro' ? '<button class="edit-link tr-copiar" onclick="verCuadro(\''+t.id+'\')">ver cuadro</button>' : '')+kmz+
-        (trArchivoTipo(t)==='kmz' ? '<button class="edit-link tr-copiar" id="tr-voc-'+t.id+'" onclick="calcularUbicacionTerreno(\''+t.id+'\')">'+(t.ubicacion_calculada_at || t.datos_vocacion ? 'recalcular ubicación' : 'calcular ubicación')+'</button>' : '')+
+        ((trArchivoTipo(t)==='kmz' || (esBodega(t) && t.maps_url)) ? '<button class="edit-link tr-copiar" id="tr-voc-'+t.id+'" onclick="calcularUbicacionTerreno(\''+t.id+'\')">'+(t.ubicacion_calculada_at || t.datos_vocacion ? 'recalcular ubicación' : 'calcular ubicación')+'</button>' : '')+
+        (esBodega(t) && t.kmz_path ? mapsLink : '')+
         '<button class="edit-link" id="tr-inv-'+t.id+'" onclick="copiarInventario(\''+t.id+'\')">copiar para inventario</button>'+
-        '<button class="edit-link" onclick="editarTerreno(\''+t.id+'\')">editar datos</button>'+
+        (esBodega(t) ? '' : '<button class="edit-link" onclick="editarTerreno(\''+t.id+'\')">editar datos</button>')+
         '<button class="edit-link tr-copiar" id="tr-todo-'+t.id+'" onclick="descargarTodo(\''+t.id+'\')">descargar todo</button>'+
         '<button class="edit-link" onclick="elegirAdjuntos(\''+t.id+'\')">agregar archivos</button>'+
         '<button class="edit-link" onclick="startEditNotasTerreno(\''+t.id+'\')">'+(t.notas?'editar notas':'agregar notas')+'</button>'+
@@ -1383,7 +1434,7 @@ function terrenosFiltrados(){
     if(fEtapa && fEtapa!=='__activos' && t.etapa!==fEtapa) return false;
     if(fOrigen && t.origen!==fOrigen) return false;
     if(q){
-      const hay = [t.folio,t.nombre,t.municipio,t.estado,t.whatsapp,t.proyecto_otro,t.conversacion].join(' ').toLowerCase();
+      const hay = [t.folio,t.nombre,t.municipio,t.estado,t.whatsapp,t.proyecto_otro,t.conversacion,bod(t).parque_nombre].join(' ').toLowerCase();
       if(!hay.includes(q)) return false;
     }
     return true;
@@ -1396,6 +1447,23 @@ function fichaTerreno(t){
   const sup = t.superficie_ha ? Number(t.superficie_ha).toLocaleString('es-MX')+' ha' : 'No indicada';
   const filas = [];
   const fila = (nombre, valor)=>{ if(valor) filas.push(nombre+': '+valor); };
+  if(esBodega(t)){
+    fila('Tipo', 'Bodega industrial');
+    fila('Ubicación', [t.municipio,t.estado].filter(Boolean).join(', '));
+    bodFilas(t).forEach(x=>fila(x[0], x[1]));
+    fila('Situación legal', t.regimen==='no_se' ? 'No sabe' : trLabel('regimen',t.regimen));
+    fila('Disponible para', trLabel('disponibilidad',t.disponibilidad));
+    const pr = bodPrecios(t);
+    const lado = t.esquema==='precio_neto' ? ' (antes de impuestos)' : (t.esquema==='sobreprecio' ? ' (lado vendedor, antes de impuestos del propietario)' : '');
+    if(pr.length) pr.forEach(x=>filas.push(x.startsWith('Venta') ? x.replace('Venta:', 'Precio de venta'+lado+':') : x.replace('Renta:', 'Renta:')));
+    else fila('Precio', t.precio_definido===false ? 'Sin definir' : '');
+    fila('Google Maps', t.maps_url);
+    fila('Planos', trArchivoTxt(t));
+    fila('Condiciones con Urbakasa', trCondiciones(t) || 'Pendientes');
+    fila('Autorización para presentarla', t.autoriza_presentacion ? 'Sí, a clientes y en la Selección de Activos' : 'Pendiente');
+    return ['*Urbakasa · Registro '+(t.folio||'')+'*', 'Registrado el '+fecha, '', '*Contacto*',
+      (t.nombre||'')+' — '+trLabel('rol',t.rol), 'WhatsApp: '+trTel(t.whatsapp), '', '*Bodega*'].concat(filas).join('\n');
+  }
   if(t.tipo!=='otro') fila('Tipo', trLabel('tipo',t.tipo));
   fila('Tipo de proyecto', trProyectoSub(t));
   fila('Ubicación', [t.municipio,t.estado].filter(Boolean).join(', '));
@@ -1415,7 +1483,7 @@ function fichaTerreno(t){
     : (t.disponibilidad==='renta' ? 'Renta por hectárea al año' : 'Precio por hectárea');
   fila(etqPrecio, t.precio_ha ? fmt(t.precio_ha)+' MXN' : (t.precio_definido===false ? 'Sin definir' : ''));
   fila('Total aproximado', trPrecioTotalTxt(t));
-  fila('KMZ o cuadro de construcción', trArchivoTxt(t));
+  fila('KMZ', trArchivoTxt(t));
   fila('Condiciones con Urbakasa', trCondiciones(t) || 'Pendientes');
   fila('Autorización para presentarlo', t.autoriza_presentacion ? 'Sí, a clientes y en la Selección de Activos' : 'Pendiente');
   return [
@@ -1447,6 +1515,13 @@ async function copiarTexto(texto){
 // ───────── Condiciones con Urbakasa ─────────
 function pctTxt(n){ return Number(n).toLocaleString('es-MX', { maximumFractionDigits: 2 }) + '%'; }
 function trCondiciones(t){
+  const renta = esBodega(t) && t.disponibilidad==='ambas' && bod(t).condicion_renta
+    ? ' · por la renta: ' + (bod(t).condicion_renta==='mitad_comision' ? 'mitad y mitad de la comisión, más IVA' : 'un mes de renta, más IVA') : '';
+  const c = trCondicionesBase(t);
+  return c ? c + renta : '';
+}
+function trCondicionesBase(t){
+  if(t.esquema==='mes_renta') return (t.rol==='propietario' ? 'Renta: un mes de renta para Urbakasa, más IVA' : 'Renta: comisión compartida mitad y mitad (50/50), más IVA');
   if(t.esquema==='precio_neto') return 'Sobreprecio: la diferencia entre el precio del propietario (antes de sus impuestos) y el precio de venta es para Urbakasa, con factura';
   if(t.esquema==='comision') return '% de comisión: ' + (t.comision_pct ? pctTxt(t.comision_pct) : '—') + ' sobre el precio de venta, más IVA';
   if(t.esquema==='compartir') return 'Comisión pactada con el propietario: ' + (t.comision_pactada_pct ? pctTxt(t.comision_pactada_pct) : '—') + ' · se comparte con Urbakasa ' + (Number(t.reparto_pct)===50 ? 'mitad y mitad (50/50)' : (t.reparto_pct ? pctTxt(t.reparto_pct) + ' de esa comisión' : '—')) + ', más IVA';
@@ -1454,6 +1529,7 @@ function trCondiciones(t){
   return '';
 }
 function trCondCorto(t){
+  if(t.esquema==='mes_renta') return t.rol==='propietario' ? 'Un mes de renta' : 'Renta 50/50';
   if(t.esquema==='precio_neto') return 'Sobreprecio';
   if(t.esquema==='comision') return 'Comisión ' + (t.comision_pct ? pctTxt(t.comision_pct) : '');
   if(t.esquema==='compartir') return 'Comparte ' + (Number(t.reparto_pct)===50 ? '50/50' : (t.reparto_pct ? pctTxt(t.reparto_pct) : '')) + ' de ' + (t.comision_pactada_pct ? pctTxt(t.comision_pactada_pct) : '');
@@ -1465,7 +1541,32 @@ function condicionesCompletas(t){ return !!t.esquema && !!t.autoriza_presentacio
 // Lo que le falta al registro para entrar a revisión
 function faltantesTerreno(t){
   const f = [];
-  if(!t.kmz_path) f.push('El KMZ del terreno o su cuadro de construcción con coordenadas UTM, completamente legible.');
+  if(esBodega(t)){
+    const b = bod(t), asesorB = t.rol==='corredor' || t.rol==='asesor';
+    if(!t.maps_url && !t.kmz_path) f.push('La ubicación de la bodega en Google Maps (el enlace para compartir).');
+    if(!bodPlanos(t).length) f.push('Los planos de la bodega.');
+    if(!b.agua || b.agua==='no_se') f.push('El suministro de agua: red municipal, pozo propio, red del parque o pipas.');
+    if(!b.m2_construidos) f.push('La superficie construida en m².');
+    if(!b.m2_terreno) f.push('La superficie del terreno en m².');
+    if(!b.altura_m) f.push('La altura libre en metros.');
+    if(!b.industria || b.industria==='no_se') f.push('El tipo de industria permitida: ligera, mediana o pesada.');
+    const venta = t.disponibilidad==='venta' || t.disponibilidad==='ambas', renta = t.disponibilidad==='renta' || t.disponibilidad==='ambas';
+    if(t.precio_definido!==false){
+      if(venta && !b.precio_venta) f.push('El precio total de venta.');
+      if(renta && !b.renta_m2_mes) f.push('La renta por m² al mes.');
+    }
+    if(!(t.archivos||[]).some(a=>a.tipo==='imagen')) f.push('Fotos de la bodega: exterior, interior, andenes y oficinas.');
+    if(t.regimen==='no_se') f.push('La situación legal de la bodega: con escritura o en sucesión.');
+    if(!t.esquema) f.push(t.disponibilidad==='renta'
+      ? (asesorB ? 'Tu confirmación de que compartimos la comisión de la renta mitad y mitad, más IVA.' : 'Tu confirmación de que por la renta Urbakasa cobra un mes de renta, más IVA.')
+      : (asesorB ? 'Tu forma de pago a Urbakasa: % de comisión (la que tienes pactada con el propietario y su reparto, normalmente mitad y mitad, más IVA) o sobreprecio.'
+                 : 'Tu forma de pago a Urbakasa: sobreprecio (el precio que quieres recibir, antes de tus impuestos) o % de comisión sobre el precio de venta, más IVA.'));
+    if(!t.autoriza_presentacion) f.push(asesorB
+      ? 'Tu confirmación de que tienes autorización del propietario para ofrecer la bodega, y tu autorización para presentarla a nuestros clientes y en nuestra Selección de Activos (urbakasa.com/activos), sin publicar datos de contacto ni la ubicación exacta.'
+      : 'Tu autorización para presentar la bodega a nuestros clientes y en nuestra Selección de Activos (urbakasa.com/activos), sin publicar tus datos de contacto ni la ubicación exacta.');
+    return f;
+  }
+  if(trArchivoTipo(t)!=='kmz') f.push('El KMZ del terreno (los planos y el cuadro de construcción no nos sirven para ubicarlo).');
   if(!t.superficie_ha) f.push('La superficie en hectáreas.');
   if(!t.precio_ha && t.precio_definido!==false) f.push(t.disponibilidad==='renta' ? 'La renta por hectárea al año.' : 'El precio por hectárea.');
   if(!t.agua && ['agricola','industrial','turistico'].includes(t.tipo)) f.push('De dónde obtiene el agua (pozo con concesión, acuerdo con un vecino, canal, río o temporal).');
@@ -1488,7 +1589,7 @@ function primerNombre(n){
   return w ? w.charAt(0).toUpperCase() + w.slice(1).toLowerCase() : '';
 }
 function mensajeWhatsApp(t){
-  const nom = primerNombre(t.nombre), cosa = esProyecto(t) ? 'proyecto' : 'terreno';
+  const nom = primerNombre(t.nombre), cosa = trPalabra(t);
   const capturado = t.aviso_version==='captura-whatsapp';
   const f = faltantesTerreno(t);
   const L = [];
@@ -1500,7 +1601,7 @@ function mensajeWhatsApp(t){
     f.forEach(x=>L.push('• '+x));
     L.push('');
     L.push('Mándalo por aquí, en este mismo chat, y lo integramos a tu registro.');
-    if(!t.kmz_path){
+    if(!t.kmz_path && !esBodega(t)){
       L.push('Si no tienes el KMZ, puedes hacerlo en earth.google.com marcando el contorno del terreno, o pedirlo a quien hizo el levantamiento. La ubicación de Google Maps no nos sirve porque no marca los límites del terreno.');
     }
   } else {
@@ -1563,6 +1664,9 @@ function descargarTerrenosExcel(){
     ['Estado', t=>t.estado],
     ['Municipio', t=>t.municipio],
     ['Superficie (ha)', t=>t.superficie_ha],
+    ['Bodega', t=>esBodega(t) ? bodFilas(t).map(x=>x[0]+': '+x[1]).join(' · ') : ''],
+    ['Bodega: precios', t=>esBodega(t) ? bodPrecios(t).join(' · ') : ''],
+    ['Google Maps', t=>t.maps_url],
     ['Agua', t=>trLabel('agua',t.agua)],
     ['Qué se siembra hoy', t=>t.cultivo],
     ['Acceso', t=>trLabel('acceso',t.acceso)],
@@ -1580,7 +1684,7 @@ function descargarTerrenosExcel(){
     ['Comisión pactada del corredor (%)', t=>t.comision_pactada_pct],
     ['Parte para Urbakasa (% de la comisión)', t=>t.reparto_pct],
     ['Autorizó presentación', t=>t.autoriza_presentacion ? 'Sí' : 'No'],
-    ['KMZ o cuadro de construcción', t=>trArchivoTxt(t)],
+    ['KMZ', t=>trArchivoTxt(t)],
     ['Datos por vocación (destacados)', t=>Object.entries((t.datos_vocacion&&t.datos_vocacion.destacados)||{}).map(([v,x])=>VOC_NOMBRES[v]+': '+x).join(' · ')],
     ['Origen', t=>t.origen],
     ['Notas', t=>t.notas]
@@ -1639,6 +1743,7 @@ function modoEdicion(t){
   document.getElementById('mr-msg').textContent = '';
 }
 function editarTerreno(id){
+  if(esBodega(terrenos.find(x=>x.id===id))){ alert('Las bodegas todavía no se editan desde aquí. Usa las notas para las correcciones.'); return; }
   const t = terrenos.find(x=>x.id===id); if(!t) return;
   mrPreparar(); modoEdicion(t);
   document.getElementById('mr-card').style.display = 'block';
@@ -2032,7 +2137,7 @@ function mrPintarArchivos(){
   const box = document.getElementById('mr-files-list');
   box.innerHTML = mrArchivos.map((a,i)=>'<div class="mr-file"><span>'+esc(a.file.name)+' <span class="lect">· '+Math.max(1,Math.round(a.file.size/1024))+' KB'+(a.lectura?' · '+esc(a.lectura):'')+(a.file.size>10*1024*1024?' · pesa más de 10 MB, no se podrá guardar':'')+'</span></span><button class="del" onclick="mrQuitarArchivo('+i+')">quitar</button></div>').join('');
   const sel = document.getElementById('mr-principal'), prev = sel.value;
-  sel.innerHTML = '<option value="">Ninguno por ahora</option>' + mrArchivos.map((a,i)=> (a.clase==='kmz'||a.clase==='pdf'||a.clase==='imagen') ? '<option value="'+i+'">'+esc(a.file.name)+(a.clase==='kmz'?' (KMZ)':' (cuadro de construcción)')+'</option>' : '').join('');
+  sel.innerHTML = '<option value="">Ninguno por ahora</option>' + mrArchivos.map((a,i)=> a.clase==='kmz' ? '<option value="'+i+'">'+esc(a.file.name)+' (KMZ)</option>' : '').join('');
   if(prev!=='' && [...sel.options].some(o=>o.value===prev)) sel.value = prev;
   else { const k = mrArchivos.findIndex(a=>a.clase==='kmz'); sel.value = k>=0 ? String(k) : ''; }
 }
@@ -2165,7 +2270,7 @@ async function guardarRegistroManual(){
     cultivo: t==='agricola' ? v('mr-cult') : null, agua: v('mr-agua') || null,
     regimen: v('mr-reg'), disponibilidad: v('mr-disp'),
     precio_ha: precio > 0 ? precio : null, precio_definido: precio > 0,
-    archivo_tipo: principal ? (principal.tipo==='kmz' ? 'kmz' : 'cuadro') : null, kmz_path: principal ? principal.path : null,
+    archivo_tipo: (principal && principal.tipo==='kmz') ? 'kmz' : null, kmz_path: (principal && principal.tipo==='kmz') ? principal.path : null,
     archivos: adjuntos, conversacion: document.getElementById('mr-texto').value.trim() || null,
     notas: v('mr-notas') || null, origen: 'whatsapp'
   };
@@ -2192,7 +2297,9 @@ async function guardarRegistroManual(){
 
 // ───────── Adjuntos en registros existentes ─────────
 let adjDestino = null;
-function elegirAdjuntos(id){ adjDestino = id; const inp = document.getElementById('tr-adj-input'); inp.value=''; inp.click(); }
+let adjComoPlano = false;
+function elegirAdjuntos(id){ adjDestino = id; adjComoPlano = false; const inp = document.getElementById('tr-adj-input'); inp.value=''; inp.click(); }
+function elegirPlanos(id){ elegirAdjuntos(id); adjComoPlano = true; }
 async function agregarAdjuntos(inp){
   const id = adjDestino, files = Array.from(inp.files||[]);
   if(!id || !files.length) return;
@@ -2200,12 +2307,11 @@ async function agregarAdjuntos(inp){
   let nuevos = [];
   try{ nuevos = await subirAdjuntos(id, files); }
   catch(e){ alert('No se pudo subir: '+e.message); return; }
+  if(adjComoPlano){ nuevos.forEach(a=>{ a.tipo = 'plano'; }); adjComoPlano = false; }
   const cambios = { archivos: (Array.isArray(t.archivos)?t.archivos:[]).concat(nuevos) };
   if(!t.kmz_path){
     const k = nuevos.find(a=>a.tipo==='kmz');
-    const c = !k && nuevos.find(a=>a.tipo==='pdf' || a.tipo==='imagen');
-    if(k){ cambios.kmz_path = k.path; cambios.archivo_tipo = 'kmz'; cambios.tiene_kmz = true; }
-    else if(c && confirm('¿'+c.nombre+' es el cuadro de construcción con coordenadas UTM?')){ cambios.kmz_path = c.path; cambios.archivo_tipo = 'cuadro'; cambios.tiene_kmz = false; }
+    if(k && !esBodega(t)){ cambios.kmz_path = k.path; cambios.archivo_tipo = 'kmz'; cambios.tiene_kmz = true; }
   }
   const { error } = await client.from('terrenos_captados').update(cambios).eq('id', id);
   if(error){ alert('Los archivos se subieron, pero no se pudieron ligar al registro: '+error.message); }
@@ -2646,7 +2752,7 @@ const RQ_L = {
   rol:{comprador:'Comprador',asesor:'Asesor'},
   perfil:{empresa_opera:'Empresa que opera',desarrolladora:'Desarrolladora',agroindustria:'Agroindustria',inversionista:'Inversionista',persona_fisica:'Persona física'},
   modalidad:{compra:'Compra',renta:'Renta',aportacion:'Aportación',sin_definir:'Sin definir'},
-  busca:{terreno:'Terreno',proyecto:'Proyecto ya estructurado'},
+  busca:{terreno:'Terreno',proyecto:'Proyecto ya estructurado',bodega:'Bodega industrial'},
   canal:{correo:'Correo',whatsapp:'WhatsApp'},
   unidad:{total:'en total',por_ha:'por hectárea',por_m2:'por m²',mes_total:'al mes, en total',anio_ha:'por hectárea al año',mes_m2:'por m² al mes'},
   agua:{si:'Sí la necesita',no:'No la necesita',no_se:'No sabe'},
@@ -2665,11 +2771,14 @@ function rqL(campo, v){
   return (RQ_L[campo] && RQ_L[campo][v]) || v;
 }
 function rqTipoTxt(r){
+  if(r.busca==='bodega'){ const b = r.bodega_req || {}; return 'Bodega industrial' + (b.industria ? ' · industria '+bodL('industria', b.industria).toLowerCase() : ''); }
   const tipo = r.tipo && r.tipo!=='otro' ? trLabel('tipo', r.tipo) : 'Otro';
   const sub = r.tipo==='otro' || r.proyecto_sub==='otro' ? (r.proyecto_otro||'') : (TR_SUBS[r.proyecto_sub]||'');
   return (r.busca==='proyecto' ? 'Proyecto ' : 'Terreno ') + tipo.toLowerCase() + (sub ? ' · '+sub : '');
 }
 function rqSupTxt(r){
+  const b = r.bodega_req || {};
+  if(r.busca==='bodega' && b.m2_desde) return (b.m2_hasta ? 'De '+bodN(b.m2_desde)+' a '+bodN(b.m2_hasta) : 'Desde '+bodN(b.m2_desde))+' m² construidos';
   if(!r.sup_desde_ha) return '';
   const n = x=>Number(x).toLocaleString('es-MX');
   return r.sup_hasta_ha ? 'De '+n(r.sup_desde_ha)+' a '+n(r.sup_hasta_ha)+' ha' : 'Desde '+n(r.sup_desde_ha)+' ha';
@@ -2715,6 +2824,13 @@ function fichaRequerimiento(r, conContacto){
   fila('Ubicación', [r.municipio, r.estado].filter(Boolean).join(', '));
   fila('Zonas que descarta', r.zonas_descarta);
   fila('Superficie', rqSupTxt(r));
+  if(r.busca==='bodega'){
+    const b = r.bodega_req || {};
+    fila('Tipo de industria', bodL('industria', b.industria));
+    fila('Parque industrial', bodL('parque', b.parque));
+    fila('Altura libre mínima', b.altura_min ? bodN(b.altura_min)+' m' : '');
+    fila('Andenes mínimos', b.andenes_min ? bodN(b.andenes_min) : '');
+  }
   if(r.crecer!==null && r.crecer!==undefined) fila('Posibilidad de crecer', r.crecer ? 'Sí' : 'No');
   fila('Presupuesto', rqPresupuestoTxt(r));
   fila('Agua', rqL('agua', r.agua) + (r.agua_volumen_m3 ? ' · '+Number(r.agua_volumen_m3).toLocaleString('es-MX')+' m³ al año' : ''));
@@ -2733,14 +2849,14 @@ function rqMensajeWhatsApp(r){
   const nom = (r.nombre||'').split(' ')[0];
   return 'Hola'+(nom ? ' '+nom : '')+', recibimos tu requerimiento. Te comparto lo que registramos para que lo confirmes o lo corrijas:\n\n'+
     fichaRequerimiento(r, false)+
-    '\n\nLo revisamos contra los terrenos que ya tenemos y te respondemos en un máximo de 2 días hábiles. Si tienes alguna pregunta, aquí estoy.';
+    '\n\nLo revisamos contra '+(r.busca==='bodega' ? 'las bodegas' : 'los terrenos')+' que ya tenemos y te respondemos en un máximo de 2 días hábiles. Si tienes alguna pregunta, aquí estoy.';
 }
 function rqCorreo(r){
   const nom = (r.nombre||'').split(' ')[0];
   const asunto = 'Tu requerimiento '+(r.folio||'')+' · Urbakasa';
   const cuerpo = 'Hola'+(nom ? ' '+nom : '')+':\n\nRecibimos tu requerimiento. Esto es lo que registramos, para que lo confirmes o lo corrijas:\n\n'+
     fichaRequerimiento(r, false).replace(/\*/g,'')+
-    '\n\nLo revisamos contra los terrenos que ya tenemos y te respondemos en un máximo de 2 días hábiles.\n\nSaludos,\nJorge Cortés\nUrbakasa';
+    '\n\nLo revisamos contra '+(r.busca==='bodega' ? 'las bodegas' : 'los terrenos')+' que ya tenemos y te respondemos en un máximo de 2 días hábiles.\n\nSaludos,\nJorge Cortés\nUrbakasa';
   return { asunto, cuerpo, texto: 'Asunto: '+asunto+'\n\n'+cuerpo };
 }
 
@@ -2761,17 +2877,59 @@ function rqPresupuestoHa(r, sup){
   }
   return null;
 }
+// Presupuesto del requerimiento contra los precios de la bodega (MXN). Devuelve {tope, precio} o un texto suave.
+function bodMXN(v, mon){ if(!v) return null; if(mon==='USD'){ const tc = tipoCambioUSD(); return tc ? Number(v)*tc : undefined; } return Number(v); }
+function cruceBodega(t, r, duras, suaves){
+  const b = bod(t), q = r.bodega_req || {};
+  // superficie construida
+  const m2 = Number(b.m2_construidos)||0;
+  const desde = q.m2_desde || (r.sup_desde_ha ? Number(r.sup_desde_ha)*10000 : 0), hasta = q.m2_hasta || (r.sup_hasta_ha ? Number(r.sup_hasta_ha)*10000 : null);
+  if(!m2) suaves.push('falta la superficie construida');
+  else if(m2 < desde || (hasta && m2 > hasta)) duras.push('m² construidos fuera de rango');
+  // industria: ligera < mediana < pesada
+  const rango = { ligera:1, mediana:2, pesada:3 };
+  if(q.industria && rango[q.industria]){
+    if(!rango[b.industria]) suaves.push('industria permitida: no sabe');
+    else if(rango[b.industria] < rango[q.industria]) duras.push('no permite industria '+bodL('industria', q.industria).toLowerCase());
+  }
+  if(q.parque==='indispensable'){ if(b.en_parque===false) duras.push('no está en parque industrial'); else if(b.en_parque!==true) suaves.push('parque industrial: no sabe'); }
+  if(q.altura_min){ if(!b.altura_m) suaves.push('falta la altura libre'); else if(Number(b.altura_m) < Number(q.altura_min)) duras.push('altura libre menor'); }
+  if(q.andenes_min){ if(b.andenes===undefined || b.andenes===null) suaves.push('faltan los andenes'); else if(Number(b.andenes) < Number(q.andenes_min)) duras.push('menos andenes'); }
+  if(q.kva && b.kva && Number(b.kva) < Number(q.kva)) suaves.push('menos kVA de los que pide');
+  if(r.agua==='si'){ if(b.agua==='no_tiene') duras.push('sin agua'); else if(!b.agua || b.agua==='no_se') suaves.push('agua: no sabe'); else if(b.agua==='pipas') suaves.push('agua solo por pipas'); }
+  // presupuesto
+  const mod = r.modalidad || 'sin_definir';
+  if(mod!=='aportacion' && r.presupuesto){
+    const u = r.presupuesto_unidad, tope = bodMXN(r.presupuesto, r.presupuesto_moneda);
+    let precio = null, sinDato = '';
+    if(u==='total' || u==='por_m2'){
+      const v = bodMXN(b.precio_venta, b.moneda);
+      if(v===undefined || tope===undefined){ suaves.push('falta el tipo de cambio'); return; }
+      if(!v) sinDato = 'la bodega no tiene precio de venta'; else precio = u==='total' ? v : (m2 ? v/m2 : null);
+    } else if(u==='mes_m2' || u==='mes_total'){
+      const v = bodMXN(b.renta_m2_mes, b.moneda);
+      if(v===undefined || tope===undefined){ suaves.push('falta el tipo de cambio'); return; }
+      if(!v) sinDato = 'la bodega no tiene renta'; else precio = u==='mes_m2' ? v : (m2 ? v*m2 : null);
+    } else { suaves.push('presupuesto en unidades de terreno'); return; }
+    if(sinDato) suaves.push(sinDato);
+    else if(precio===null) suaves.push('falta la superficie para comparar el precio');
+    else if(precio > tope*1.15) duras.push('precio arriba del presupuesto');
+    else if(precio > tope) suaves.push('precio hasta 15 % arriba');
+  }
+}
 function cruce(t, r){
   const duras = [], suaves = [];
+  const bodegas = esBodega(t) && r.busca==='bodega';
   // tipo y terreno/proyecto
   if(r.tipo && t.tipo && r.tipo!=='otro' && t.tipo!=='otro' && r.tipo!==t.tipo) duras.push('tipo distinto');
-  if((r.busca||'terreno') !== (t.oferta||'terreno')) duras.push(r.busca==='proyecto' ? 'busca proyecto' : 'busca terreno');
+  if((r.busca||'terreno') !== (t.oferta||'terreno')) duras.push(r.busca==='proyecto' ? 'busca proyecto' : (r.busca==='bodega' ? 'busca bodega' : 'busca terreno'));
   // estado (el municipio se muestra, no filtra)
   if(r.estado && t.estado && normTxt(r.estado)!==normTxt(t.estado)) duras.push('otro estado');
   if(!t.estado) suaves.push('el terreno no tiene estado');
-  // superficie
+  // superficie (bodegas: m² construidos, más abajo)
   const sup = Number(t.superficie_ha)||0;
-  if(!sup) suaves.push('falta la superficie');
+  if(bodegas) cruceBodega(t, r, duras, suaves);
+  else if(!sup) suaves.push('falta la superficie');
   else if(sup < Number(r.sup_desde_ha||0) || (r.sup_hasta_ha && sup > Number(r.sup_hasta_ha))) duras.push('superficie fuera de rango');
   // modalidad ↔ disponibilidad
   const disp = t.disponibilidad || '';
@@ -2781,8 +2939,8 @@ function cruce(t, r){
     if(!ok) duras.push('modalidad distinta');
   }
   if(!disp) suaves.push('falta la disponibilidad');
-  // presupuesto
-  if(mod!=='aportacion' && r.presupuesto){
+  // presupuesto (bodegas: en cruceBodega)
+  if(!bodegas && mod!=='aportacion' && r.presupuesto){
     const tope = rqPresupuestoHa(r, sup);
     if(tope===undefined) suaves.push(r.presupuesto_moneda==='USD' && !tipoCambioUSD() ? 'falta el tipo de cambio' : 'falta la superficie para comparar el precio');
     else if(tope){
@@ -2791,8 +2949,8 @@ function cruce(t, r){
       else if(Number(t.precio_ha) > tope) suaves.push('precio hasta 15 % arriba');
     }
   }
-  // agua
-  if(r.agua==='si'){
+  // agua (bodegas: en cruceBodega)
+  if(!bodegas && r.agua==='si'){
     if(['sin_agua','temporal'].includes(t.agua)) duras.push('sin agua');
     else if(!t.agua || t.agua==='no_se') suaves.push('agua: no sabe');
   }
@@ -2819,7 +2977,8 @@ function cruceHTML(lista, tipoLista){
     const nota = c.suaves.length ? ' <span style="color:var(--rust)">('+esc(c.suaves.join(', '))+')</span>' : '';
     if(tipoLista==='terrenos'){
       return '<p class="stat-sub" style="margin:3px 0;">'+chip+'<strong>'+esc(o.folio||'')+'</strong> · '+esc(trOfertaTipo(o))+' · '+esc([o.municipio,o.estado].filter(Boolean).join(', '))+
-        (o.superficie_ha ? ' · '+Number(o.superficie_ha).toLocaleString('es-MX')+' ha' : '')+(o.precio_ha ? ' · '+fmt(o.precio_ha)+'/ha' : '')+nota+'</p>';
+        (esBodega(o) ? (bodResumen(o) ? ' · '+esc(bodResumen(o)) : '')+(bodPrecios(o).length ? ' · '+esc(bodPrecios(o).join(' · ')) : '')
+          : (o.superficie_ha ? ' · '+Number(o.superficie_ha).toLocaleString('es-MX')+' ha' : '')+(o.precio_ha ? ' · '+fmt(o.precio_ha)+'/ha' : ''))+nota+'</p>';
     }
     return '<p class="stat-sub" style="margin:3px 0;">'+chip+'<strong>'+esc(o.folio||'')+'</strong> · '+esc(o.nombre||'')+(o.empresa?' ('+esc(o.empresa)+')':'')+' · '+esc(rqTipoTxt(o))+' · '+esc(rqSupTxt(o))+nota+'</p>';
   }).join('');
@@ -3010,6 +3169,7 @@ function rqLeer(){
   const mail = crudo.match(/[\w.+-]+@[\w-]+\.[\w.-]+/); if(mail) p('correo','rqm-correo',mail[0].toLowerCase());
   p('tipo','rqm-tipo',c.tipo); rqSubs(); if(c.sub) p('tipo de proyecto','rqm-sub',c.sub);
   if(c.oferta==='proyecto') p('busca','rqm-busca','proyecto');
+  if(/\bbodega|nave industrial/.test(t)){ p('busca','rqm-busca','bodega'); p('tipo','rqm-tipo','industrial'); }
   p('estado','rqm-estado',c.estado); p('municipio','rqm-municipio',c.municipio);
   // superficie: "de 50 a 120 ha", "entre 20 y 40 hectáreas", "mínimo 30 ha"
   const rango = t.match(/(?:de|entre)\s*(\d[\d,.]*)\s*(?:ha|has|hectareas)?\s*(?:a|y|-)\s*(\d[\d,.]*)\s*(?:ha\b|has\b|hectareas)/);
@@ -3216,12 +3376,29 @@ async function calcularUbicacionTerreno(id, silencioso){
   const btn = document.getElementById('tr-voc-'+id), antes = btn ? btn.textContent : '';
   try{
     if(btn){ btn.textContent = 'calculando…'; btn.disabled = true; }
-    if(trArchivoTipo(t)==='cuadro') throw new Error('Con cuadro de construcción queda pendiente: se calcula cuando el terreno tenga KMZ.');
-    if(trArchivoTipo(t)!=='kmz') throw new Error('Se necesita el KMZ del terreno.');
-    const polis = await contornoTerreno(t);
-    if(!polis) throw new Error('El KMZ no trae un contorno cerrado.');
+    let polis = null, punto = false;
+    if(esBodega(t) && trArchivoTipo(t)!=='kmz' && t.maps_url){
+      // bodega con solo Google Maps: se calcula desde el punto (sin saber si colinda)
+      const p = actCoordenadas(t.maps_url) || await actResolverCorto(t.maps_url);
+      if(!p) throw new Error('No encontré las coordenadas en el enlace de Google Maps.');
+      polis = actCuadrito(p[0], p[1]); punto = true;
+    } else {
+      if(trArchivoTipo(t)==='cuadro') throw new Error('Con cuadro de construcción queda pendiente: se calcula cuando el terreno tenga KMZ.');
+      if(trArchivoTipo(t)!=='kmz') throw new Error('Se necesita el KMZ del terreno.');
+      polis = await contornoTerreno(t);
+      if(!polis) throw new Error('El KMZ no trae un contorno cerrado.');
+    }
     const dv = await calcularVocacion(t, polis);
     const ub = await calcularUbicacionDatos(t, polis);
+    if(punto){
+      ub.colinda_camino = null;
+      (dv.datos||[]).forEach(d=>{ if(d.clave==='mancha_urbana'){ d.colinda = false; d.nota = 'Distancia desde el punto de Google Maps; sin KMZ no se puede saber si colinda'; }
+                                  if(d.clave==='altitud'){ d.dato = 'Altitud en el punto'; d.min = undefined; d.max = undefined; } });
+      if(dv.destacados && dv.destacados.habitacional && /Colinda/.test(dv.destacados.habitacional)){
+        const mu = (dv.datos||[]).find(d=>d.clave==='mancha_urbana'); dv.destacados.habitacional = 'A '+vocRangoKm(mu && mu.valor!=null ? mu.valor : 0)+' de la mancha urbana';
+      }
+      dv.desde_punto = true;
+    }
     let cambios = Object.assign({ datos_vocacion: dv }, ub);
     let { error } = await client.from('terrenos_captados').update(cambios).eq('id', id);
     if(error && /column|schema cache/i.test(error.message)){
@@ -3321,8 +3498,9 @@ async function actAnalizar(){
   try{
     // 1) datos del texto
     const L = texto.trim() ? PC.leer(texto) : { campos:{} }, c = L.campos || {};
-    const tipoSel = document.getElementById('act-tipo').value;
-    const t = { tipo: tipoSel || c.tipo || 'otro', oferta: c.oferta || 'terreno', proyecto_sub: c.sub || null, estado: c.estado || null, municipio: c.municipio || null,
+    const tipoSel0 = document.getElementById('act-tipo').value, esBod = tipoSel0==='bodega' || (!tipoSel0 && /\bbodega|nave industrial/i.test(texto));
+    const tipoSel = esBod ? 'industrial' : tipoSel0;
+    const t = { tipo: tipoSel || c.tipo || 'otro', oferta: esBod ? 'bodega' : (c.oferta || 'terreno'), proyecto_sub: c.sub || null, estado: c.estado || null, municipio: c.municipio || null,
       superficie_ha: c.superficie || null, precio_ha: c.precio || null, agua: c.agua || null, regimen: c.regimen || null, disponibilidad: c.disponibilidad || null, cultivo: c.cultivo || null };
     // 2) ubicación: KMZ (contorno) o punto de Google Maps
     let polis = null, modo = '';
@@ -3366,6 +3544,12 @@ async function actAnalizar(){
 }
 function actFaltantes(t){
   const f = [];
+  if(esBodega(t)){
+    if(!t.estado) f.push('estado'); if(!t.municipio) f.push('municipio');
+    f.push('m² construidos, altura libre, andenes, tipo de industria y precio (revísalos en el texto)');
+    if(!t.regimen) f.push('situación legal'); if(!t.disponibilidad) f.push('disponibilidad (venta o renta)');
+    return f;
+  }
   if(!t.tipo || t.tipo==='otro') f.push('tipo de activo');
   if(!t.estado) f.push('estado'); if(!t.municipio) f.push('municipio');
   if(!t.superficie_ha) f.push('superficie');
@@ -3382,9 +3566,9 @@ function actTexto(){
   L.push('');
   L.push('DATOS DEL ACTIVO');
   const fila = (k,v)=>{ if(v!==null && v!==undefined && v!=='') L.push(k+': '+v); };
-  fila('Tipo', trLabel('tipo', t.tipo) + (t.proyecto_sub ? ' · '+(TR_SUBS[t.proyecto_sub]||t.proyecto_sub) : ''));
+  fila('Tipo', esBodega(t) ? 'Bodega industrial' : trLabel('tipo', t.tipo) + (t.proyecto_sub ? ' · '+(TR_SUBS[t.proyecto_sub]||t.proyecto_sub) : ''));
   fila('Ubicación', [t.municipio, t.estado].filter(Boolean).join(', '));
-  fila('Superficie', t.superficie_ha ? Number(t.superficie_ha).toLocaleString('es-MX')+' ha' + (t.__ha_kmz && Math.abs(t.__ha_kmz - t.superficie_ha) > 0.01 ? ' (el KMZ mide '+t.__ha_kmz.toLocaleString('es-MX')+' ha)' : '') : '');
+  if(!esBodega(t)) fila('Superficie', t.superficie_ha ? Number(t.superficie_ha).toLocaleString('es-MX')+' ha' + (t.__ha_kmz && Math.abs(t.__ha_kmz - t.superficie_ha) > 0.01 ? ' (el KMZ mide '+t.__ha_kmz.toLocaleString('es-MX')+' ha)' : '') : '');
   fila('Agua', trLabel('agua', t.agua)); fila('Situación legal', trLabel('regimen', t.regimen)); fila('Disponible para', trLabel('disponibilidad', t.disponibilidad));
   fila('Cultivo', t.cultivo); fila('Precio por hectárea', t.precio_ha ? fmt(t.precio_ha)+' MXN' : '');
   fila('Ubicación usada para el cálculo', modo==='kmz' ? 'contorno del KMZ' : 'punto de Google Maps (sin contorno)');
@@ -3448,7 +3632,7 @@ function embFicha(t){
 function embAbrirAsignar(terrenoId, embId){
   const t = terrenos.find(x=>x.id===terrenoId), e = perfiles.find(p=>p.id===embId), box = document.getElementById('emb-box-'+terrenoId);
   box.innerHTML = '<div class="mr-resumen" style="display:block;margin-top:8px;">'+
-    '<p class="stat-sub" style="margin:0 0 6px;"><strong>Asignar el terreno '+esc(t.folio||'')+' a '+esc(e.nombre||'')+'</strong> para la venta del DVT. Verá la ficha del terreno, sus archivos (KMZ, cuadro y fotos) y los documentos que adjuntes aquí.</p>'+
+    '<p class="stat-sub" style="margin:0 0 6px;"><strong>Asignar el terreno '+esc(t.folio||'')+' a '+esc(e.nombre||'')+'</strong> para la venta del DVT. Verá la ficha del terreno, sus archivos (KMZ, planos y fotos) y los documentos que adjuntes aquí.</p>'+
     '<label>Documentos para '+esc(e.nombre||'')+' (opcional; PDF u otros, hasta 15 MB cada uno)</label><input type="file" id="emb-docs-'+terrenoId+'" multiple>'+
     '<button class="edit-link tr-copiar" id="emb-btn-'+terrenoId+'" onclick="embAsignar(\''+terrenoId+'\',\''+embId+'\')">asignar</button>'+
     '<button class="edit-link" onclick="renderTerrenos()">cancelar</button></div>';
@@ -3635,8 +3819,8 @@ document.getElementById('tr-kmz-input').addEventListener('change', async functio
   if(!file || !id) return;
   const t = terrenos.find(x=>x.id===id);
   const ext = (file.name.split('.').pop()||'').toLowerCase();
-  const tipoArch = TR_EXT.kmz.includes(ext) ? 'kmz' : (TR_EXT.cuadro.includes(ext) ? 'cuadro' : '');
-  if(!tipoArch){ alert('El archivo debe ser KMZ/KML, o el cuadro de construcción en PDF o foto.'); return; }
+  const tipoArch = TR_EXT.kmz.includes(ext) ? 'kmz' : '';
+  if(!tipoArch){ alert('El archivo debe ser KMZ o KML. Ya no recibimos cuadros de construcción ni planos como ubicación.'); return; }
   if(file.size > 10*1024*1024){ alert('El archivo pesa más de 10 MB.'); return; }
   const btn = document.getElementById('tr-kmz-'+id);
   if(btn){ btn.textContent = 'subiendo…'; btn.disabled = true; }
