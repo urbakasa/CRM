@@ -364,6 +364,7 @@
         <div><label>Superficie (ha)</label><input id="mr-sup" type="number" min="0" step="0.01"></div>
         <div id="mr-cult-box"><label>Qué se siembra hoy</label><input id="mr-cult"></div>
         <div><label>Agua</label><select id="mr-agua"><option value="">Sin dato</option></select></div>
+        <div><label>Agua · si es «Otro», ¿cuál?</label><input id="mr-agua-otro" type="text" maxlength="120"></div>
         <div><label>Documentos del terreno</label><select id="mr-reg"><option value="escritura">Con escritura</option><option value="ejidal">Ejidal</option><option value="sucesion">En sucesión</option><option value="no_se">No sabe</option></select></div>
         <div><label>Disponible para</label><select id="mr-disp"><option value="venta">Venta</option><option value="renta">Renta</option><option value="aportacion">Aportación a un proyecto</option><option value="abierto">Abierto a opciones</option></select></div>
         <div><label>Precio por ha (MXN; renta: por año)</label><input id="mr-precio" inputmode="numeric" placeholder="vacío = sin definir"></div>
@@ -1182,7 +1183,7 @@ const TR_ETAPAS = ['Nuevo','Datos completos','Aplica requerimiento','Candidato r
 const TR_L = {
   tipo:{agricola:'Agrícola',industrial:'Industrial',habitacional:'Habitacional',turistico:'Turístico',otro:'Otro'},
   rol:{propietario:'Propietario',corredor:'Corredor',asesor:'Asesor inmobiliario'},
-  agua:{concesion_propia:'Pozo con concesión propia',acuerdo_vecino:'Acuerdo con un vecino',canal_riego:'Canal de riego',rio:'Río',temporal:'Temporal',red_municipal:'Red municipal',sin_agua:'No tiene agua',no_se:'No sabe'},
+  agua:{concesion_propia:'Pozo con concesión propia',pozo_sin_concesion:'Pozo sin concesión vigente',pozo_artesiano:'Pozo artesiano',pozo_artesanal:'Pozo artesanal',noria:'Noria',acuerdo_vecino:'Acuerdo con un vecino',canal_riego:'Canal de riego',rio:'Río',presa:'Presa',reservorio:'Reservorio',temporal:'Temporal',red_municipal:'Red municipal',sin_agua:'No tiene agua',otro:'Otro',no_se:'No sabe'},
   acceso:{federal:'Carretera federal o autopista',estatal:'Carretera estatal',camino:'Camino municipal o terracería',no_se:'No sabe'},
   energia:{en_terreno:'En el terreno o colindante',menos_1km:'A menos de 1 km',mas_lejos:'Más lejos',no_se:'No sabe'},
   distancia_urbana:{colinda:'Colinda',menos_5km:'Menos de 5 km','5_15km':'De 5 a 15 km',mas_15km:'Más de 15 km',no_se:'No sabe'},
@@ -1199,6 +1200,7 @@ const TR_SUBS = {
   hotel:'Hotel o proyecto hotelero', residencial_turistico:'Desarrollo residencial turístico', ecoturistico:'Parque ecoturístico'
 };
 function esProyecto(t){ return t.oferta==='proyecto'; }
+function trAguaTxt(t){ return t.agua==='otro' ? 'Otro'+(t.agua_otro ? ': '+t.agua_otro : '') : trLabel('agua', t.agua); }
 function esBodega(t){ return !!t && t.oferta==='bodega'; }
 function trOferta(t){ return esProyecto(t) ? 'Proyecto' : (esBodega(t) ? 'Bodega' : 'Terreno'); }
 function trPalabra(t){ return esProyecto(t) ? 'proyecto' : (esBodega(t) ? 'bodega' : 'terreno'); }
@@ -1468,7 +1470,7 @@ function fichaTerreno(t){
   fila('Tipo de proyecto', trProyectoSub(t));
   fila('Ubicación', [t.municipio,t.estado].filter(Boolean).join(', '));
   fila('Superficie', sup);
-  fila('Agua', trLabel('agua',t.agua));
+  fila('Agua', trAguaTxt(t));
   fila('Qué se siembra hoy', t.cultivo);
   fila('Acceso', trLabel('acceso',t.acceso));
   fila('Energía eléctrica', trLabel('energia',t.energia));
@@ -1569,7 +1571,9 @@ function faltantesTerreno(t){
   if(trArchivoTipo(t)!=='kmz') f.push('El KMZ del terreno (los planos y el cuadro de construcción no nos sirven para ubicarlo).');
   if(!t.superficie_ha) f.push('La superficie en hectáreas.');
   if(!t.precio_ha && t.precio_definido!==false) f.push(t.disponibilidad==='renta' ? 'La renta por hectárea al año.' : 'El precio por hectárea.');
-  if(!t.agua && ['agricola','industrial','turistico'].includes(t.tipo)) f.push('De dónde obtiene el agua (pozo con concesión, acuerdo con un vecino, canal, río o temporal).');
+  if(!t.agua && ['agricola','industrial','turistico'].includes(t.tipo)) f.push('De dónde obtiene el agua (pozo con o sin concesión, pozo artesiano o artesanal, noria, acuerdo con un vecino, canal, río, presa, reservorio o temporal).');
+  if(t.agua==='pozo_sin_concesion') f.push('La situación del pozo: si la concesión está en trámite, vencida o nunca se ha tramitado.');
+  if(t.agua==='otro' && !t.agua_otro) f.push('De dónde obtiene el agua.');
   if(t.regimen==='no_se') f.push('La situación legal del terreno: con escritura, ejidal o en sucesión.');
   const asesor = t.rol==='corredor' || t.rol==='asesor';
   if(!t.esquema){
@@ -1667,7 +1671,7 @@ function descargarTerrenosExcel(){
     ['Bodega', t=>esBodega(t) ? bodFilas(t).map(x=>x[0]+': '+x[1]).join(' · ') : ''],
     ['Bodega: precios', t=>esBodega(t) ? bodPrecios(t).join(' · ') : ''],
     ['Google Maps', t=>t.maps_url],
-    ['Agua', t=>trLabel('agua',t.agua)],
+    ['Agua', t=>trAguaTxt(t)],
     ['Qué se siembra hoy', t=>t.cultivo],
     ['Acceso', t=>trLabel('acceso',t.acceso)],
     ['Energía eléctrica', t=>trLabel('energia',t.energia)],
@@ -1754,7 +1758,7 @@ function editarTerreno(id){
   if(t.proyecto_sub) set('mr-sub',t.proyecto_sub); mrAplicar(); set('mr-otro',t.proyecto_otro);
   if(t.estado && !MR_ESTADOS.includes(t.estado)){ const o = document.createElement('option'); o.textContent = t.estado; document.getElementById('mr-estado').appendChild(o); }
   set('mr-estado',t.estado); set('mr-mun',t.municipio); set('mr-sup',t.superficie_ha); set('mr-cult',t.cultivo);
-  set('mr-agua',t.agua||''); set('mr-reg',t.regimen||'no_se'); set('mr-disp',t.disponibilidad||'venta');
+  set('mr-agua',t.agua||''); set('mr-agua-otro',t.agua_otro||''); set('mr-reg',t.regimen||'no_se'); set('mr-disp',t.disponibilidad||'venta');
   set('mr-precio', t.precio_ha ? Number(t.precio_ha).toLocaleString('es-MX') : '');
   set('mr-esquema', t.esquema||''); set('mr-com', t.comision_pct); set('mr-pac', t.comision_pactada_pct); set('mr-rep', t.reparto_pct);
   document.getElementById('mr-aut').checked = !!t.autoriza_presentacion; mrCondiciones();
@@ -1783,7 +1787,7 @@ async function guardarEdicion(){
     nombre: v('mr-nombre'), whatsapp: wa, rol: v('mr-rol'), oferta: v('mr-oferta'), tipo: tp,
     proyecto_sub: proy && MR_SUBS[tp] ? v('mr-sub') : null, proyecto_otro: otroVisible ? v('mr-otro') : null,
     estado: v('mr-estado'), municipio: v('mr-mun'), superficie_ha: v('mr-sup') || null,
-    cultivo: tp==='agricola' ? (v('mr-cult') || null) : null, agua: v('mr-agua') || null,
+    cultivo: tp==='agricola' ? (v('mr-cult') || null) : null, agua: v('mr-agua') || null, agua_otro: v('mr-agua')==='otro' ? (v('mr-agua-otro') || null) : null,
     regimen: v('mr-reg'), disponibilidad: v('mr-disp'),
     precio_ha: precio > 0 ? precio : null,
     precio_definido: precio > 0 ? true : (t.precio_definido===false ? false : null)
@@ -1987,13 +1991,19 @@ const PC = (function(){
 
     // Agua
     r._avisos = [];
-    if((/\b(concesion|concesionad|titulo de agua|titulo de concesion|titulo de pozo|conagua)/.test(t) || /pozo[^.\n]{0,30}titulo|titulo[^.\n]{0,30}pozo/.test(t)) && !/(pozo|agua|riego)[^.\n]{0,25}(compartid|vecin)|(compartid|vecin)[^.\n]{0,25}(pozo|agua|riego)/.test(t)) set('agua','concesion_propia');
+    if(/pozo[^.\n]{0,30}(sin (titulo|concesion)|concesion vencida|no tiene (titulo|concesion))|(sin (titulo|concesion)|concesion vencida)[^.\n]{0,30}pozo/.test(t)) set('agua','pozo_sin_concesion');
+    else if((/\b(concesion|concesionad|titulo de agua|titulo de concesion|titulo de pozo|conagua)/.test(t) || /pozo[^.\n]{0,30}titulo|titulo[^.\n]{0,30}pozo/.test(t)) && !/(pozo|agua|riego)[^.\n]{0,25}(compartid|vecin)|(compartid|vecin)[^.\n]{0,25}(pozo|agua|riego)/.test(t)) set('agua','concesion_propia');
     else if(/(pozo|agua|riego)[^.\n]{0,25}(compartid|vecin)|(compartid|vecin)[^.\n]{0,25}(pozo|agua|riego)/.test(t)) set('agua','acuerdo_vecino');
     else if(/\b(canal|distrito de riego|modulo de riego)\b/.test(t)) set('agua','canal_riego');
     else if(/\brio\b/.test(t)) set('agua','rio');
     else if(/\btemporal\b/.test(t)) set('agua','temporal');
     else if(/\b(red municipal|agua potable)\b/.test(t)) set('agua','red_municipal');
     else if(/\b(sin agua|no tiene agua|no cuenta con agua)\b/.test(t)) set('agua','sin_agua');
+    else if(/\bpozo artesiano\b/.test(t)) set('agua','pozo_artesiano');
+    else if(/\bpozo artesanal\b/.test(t)) set('agua','pozo_artesanal');
+    else if(/\bnoria\b/.test(t)) set('agua','noria');
+    else if(/\b(presa|represa)\b/.test(t)) set('agua','presa');
+    else if(/\b(reservorio|bordo|olla de agua)\b/.test(t)) set('agua','reservorio');
     if(!('agua' in r) && /\bpozo/.test(t)) r._avisos.push('Menciona un pozo, pero no dice si tiene concesión: confírmalo antes de elegir el agua.');
 
     // Documentos
@@ -2267,7 +2277,7 @@ async function guardarRegistroManual(){
     id: id, nombre: v('mr-nombre'), whatsapp: wa, rol: v('mr-rol'), oferta: v('mr-oferta'), tipo: t,
     proyecto_sub: sub, proyecto_otro: otroVisible ? v('mr-otro') : null,
     estado: v('mr-estado'), municipio: v('mr-mun'), superficie_ha: v('mr-sup') || null,
-    cultivo: t==='agricola' ? v('mr-cult') : null, agua: v('mr-agua') || null,
+    cultivo: t==='agricola' ? v('mr-cult') : null, agua: v('mr-agua') || null, agua_otro: v('mr-agua')==='otro' ? (v('mr-agua-otro') || null) : null,
     regimen: v('mr-reg'), disponibilidad: v('mr-disp'),
     precio_ha: precio > 0 ? precio : null, precio_definido: precio > 0,
     archivo_tipo: (principal && principal.tipo==='kmz') ? 'kmz' : null, kmz_path: (principal && principal.tipo==='kmz') ? principal.path : null,
@@ -2282,7 +2292,7 @@ async function guardarRegistroManual(){
     msg.textContent = 'No se pudo registrar: '+error.message+' (revisa que ya corriste el SQL v2.2 del CRM).';
     return;
   }
-  ['mr-texto','mr-nombre','mr-wa','mr-otro','mr-mun','mr-sup','mr-cult','mr-precio','mr-notas','mr-esquema','mr-com','mr-pac','mr-rep'].forEach(x=>document.getElementById(x).value='');
+  ['mr-texto','mr-nombre','mr-wa','mr-otro','mr-mun','mr-sup','mr-cult','mr-agua-otro','mr-precio','mr-notas','mr-esquema','mr-com','mr-pac','mr-rep'].forEach(x=>document.getElementById(x).value='');
   document.getElementById('mr-aut').checked = false; mrCondiciones();
   document.querySelectorAll('#mr-card .auto').forEach(e=>e.classList.remove('auto'));
   mrArchivos = []; mrPintarArchivos(); document.getElementById('mr-resumen').style.display='none';
@@ -2953,6 +2963,8 @@ function cruce(t, r){
   if(!bodegas && r.agua==='si'){
     if(['sin_agua','temporal'].includes(t.agua)) duras.push('sin agua');
     else if(!t.agua || t.agua==='no_se') suaves.push('agua: no sabe');
+    else if(t.agua==='pozo_sin_concesion') suaves.push('pozo sin concesión vigente');
+    else if(t.agua==='otro') suaves.push('agua: '+(t.agua_otro || 'otro'));
   }
   // descartes
   const desc = r.descarta || [];
@@ -3569,7 +3581,7 @@ function actTexto(){
   fila('Tipo', esBodega(t) ? 'Bodega industrial' : trLabel('tipo', t.tipo) + (t.proyecto_sub ? ' · '+(TR_SUBS[t.proyecto_sub]||t.proyecto_sub) : ''));
   fila('Ubicación', [t.municipio, t.estado].filter(Boolean).join(', '));
   if(!esBodega(t)) fila('Superficie', t.superficie_ha ? Number(t.superficie_ha).toLocaleString('es-MX')+' ha' + (t.__ha_kmz && Math.abs(t.__ha_kmz - t.superficie_ha) > 0.01 ? ' (el KMZ mide '+t.__ha_kmz.toLocaleString('es-MX')+' ha)' : '') : '');
-  fila('Agua', trLabel('agua', t.agua)); fila('Situación legal', trLabel('regimen', t.regimen)); fila('Disponible para', trLabel('disponibilidad', t.disponibilidad));
+  fila('Agua', trAguaTxt(t)); fila('Situación legal', trLabel('regimen', t.regimen)); fila('Disponible para', trLabel('disponibilidad', t.disponibilidad));
   fila('Cultivo', t.cultivo); fila('Precio por hectárea', t.precio_ha ? fmt(t.precio_ha)+' MXN' : '');
   fila('Ubicación usada para el cálculo', modo==='kmz' ? 'contorno del KMZ' : 'punto de Google Maps (sin contorno)');
   const ubi = ubLineasFicha(t); if(ubi.length){ L.push(''); ubi.forEach(x=>L.push(x)); }
