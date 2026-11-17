@@ -1277,6 +1277,7 @@ function trArchivoTipo(t){ return t.kmz_path ? (t.archivo_tipo || (t.tiene_kmz ?
 function trArchivoTxt(t){
   const a = trArchivoTipo(t);
   if(esBodega(t)){ const n = bodPlanos(t).length; return n ? n+(n===1?' plano recibido':' planos recibidos') : 'Sin planos'; }
+  if(a!=='kmz' && a!=='cuadro' && t.maps_url) return 'Sin KMZ: terreno urbano con ubicación de Google Maps';
   return a==='kmz' ? 'KMZ recibido' : (a==='cuadro' ? 'Cuadro de construcción recibido' : 'Pendiente');
 }
 const TR_EXT = { kmz:['kmz','kml'], cuadro:['pdf','jpg','jpeg','png','heic','heif','webp'] };
@@ -1374,6 +1375,8 @@ function renderTerrenos(){
       : t.kmz_path
       ? '<button class="edit-link" onclick="descargarKMZ(\''+t.id+'\')">descargar '+(trArchivoTipo(t)==='cuadro'?'cuadro':'KMZ')+'</button>'+
         '<button class="edit-link" id="tr-kmz-'+t.id+'" onclick="elegirKMZ(\''+t.id+'\')">reemplazar archivo</button>'
+      : t.maps_url
+      ? mapsLink + '<button class="edit-link" id="tr-kmz-'+t.id+'" onclick="elegirKMZ(\''+t.id+'\')">subir KMZ (opcional)</button>'
       : '<span class="tr-chip" style="margin:0;">falta KMZ</span>'+
         '<button class="edit-link" id="tr-kmz-'+t.id+'" onclick="elegirKMZ(\''+t.id+'\')">subir archivo</button>';
     const etapaSel = '<select onchange="updateEtapaTerreno(\''+t.id+'\', this.value)">'+
@@ -1400,8 +1403,8 @@ function renderTerrenos(){
         '<button class="edit-link" id="tr-ficha-'+t.id+'" onclick="copiarFicha(\''+t.id+'\', true)">solo ficha</button>'+
         (trArchivoTipo(t)==='kmz' ? '<button class="edit-link tr-copiar" onclick="verMapa(\''+t.id+'\')">ver en mapa</button>' : '')+
         (trArchivoTipo(t)==='cuadro' ? '<button class="edit-link tr-copiar" onclick="verCuadro(\''+t.id+'\')">ver cuadro</button>' : '')+kmz+
-        ((trArchivoTipo(t)==='kmz' || (esBodega(t) && t.maps_url)) ? '<button class="edit-link tr-copiar" id="tr-voc-'+t.id+'" onclick="calcularUbicacionTerreno(\''+t.id+'\')">'+(t.ubicacion_calculada_at || t.datos_vocacion ? 'recalcular ubicación' : 'calcular ubicación')+'</button>' : '')+
-        (esBodega(t) && t.kmz_path ? mapsLink : '')+
+        ((trArchivoTipo(t)==='kmz' || t.maps_url) ? '<button class="edit-link tr-copiar" id="tr-voc-'+t.id+'" onclick="calcularUbicacionTerreno(\''+t.id+'\')">'+(t.ubicacion_calculada_at || t.datos_vocacion ? 'recalcular ubicación' : 'calcular ubicación')+'</button>' : '')+
+        (t.kmz_path && t.maps_url ? mapsLink : '')+
         '<button class="edit-link" id="tr-inv-'+t.id+'" onclick="copiarInventario(\''+t.id+'\')">copiar para inventario</button>'+
         (esBodega(t) ? '' : '<button class="edit-link" onclick="editarTerreno(\''+t.id+'\')">editar datos</button>')+
         '<button class="edit-link tr-copiar" id="tr-todo-'+t.id+'" onclick="descargarTodo(\''+t.id+'\')">descargar todo</button>'+
@@ -1427,7 +1430,7 @@ function terrenosFiltrados(){
   return terrenos.filter(t=>{
     if(fTipo && t.tipo!==fTipo) return false;
     if(fOferta && (t.oferta||'terreno')!==fOferta) return false;
-    if(fKmz==='pendiente' && t.kmz_path) return false;
+    if(fKmz==='pendiente' && (t.kmz_path || t.maps_url)) return false;
     if(fKmz==='recibido' && !t.kmz_path) return false;
     if((fKmz==='kmz' || fKmz==='cuadro') && trArchivoTipo(t)!==fKmz) return false;
     if(fCond==='ok' && !condicionesCompletas(t)) return false;
@@ -1486,6 +1489,7 @@ function fichaTerreno(t){
   fila(etqPrecio, t.precio_ha ? fmt(t.precio_ha)+' MXN' : (t.precio_definido===false ? 'Sin definir' : ''));
   fila('Total aproximado', trPrecioTotalTxt(t));
   fila('KMZ', trArchivoTxt(t));
+  fila('Google Maps', t.maps_url);
   fila('Condiciones con Urbakasa', trCondiciones(t) || 'Pendientes');
   fila('Autorización para presentarlo', t.autoriza_presentacion ? 'Sí, a clientes y en la Selección de Activos' : 'Pendiente');
   return [
@@ -1568,7 +1572,7 @@ function faltantesTerreno(t){
       : 'Tu autorización para presentar la bodega a nuestros clientes y en nuestra Selección de Activos (urbakasa.com/activos), sin publicar tus datos de contacto ni la ubicación exacta.');
     return f;
   }
-  if(trArchivoTipo(t)!=='kmz') f.push('El KMZ del terreno (los planos y el cuadro de construcción no nos sirven para ubicarlo).');
+  if(trArchivoTipo(t)!=='kmz' && !t.maps_url) f.push('El KMZ del terreno (los planos y el cuadro de construcción no nos sirven para ubicarlo).');
   if(!t.superficie_ha) f.push('La superficie en hectáreas.');
   if(!t.precio_ha && t.precio_definido!==false) f.push(t.disponibilidad==='renta' ? 'La renta por hectárea al año.' : 'El precio por hectárea.');
   if(!t.agua && ['agricola','industrial','turistico'].includes(t.tipo)) f.push('De dónde obtiene el agua (pozo con o sin concesión, pozo artesiano o artesanal, noria, acuerdo con un vecino, canal, río, presa, reservorio o temporal).');
@@ -1605,7 +1609,7 @@ function mensajeWhatsApp(t){
     f.forEach(x=>L.push('• '+x));
     L.push('');
     L.push('Mándalo por aquí, en este mismo chat, y lo integramos a tu registro.');
-    if(!t.kmz_path && !esBodega(t)){
+    if(!t.kmz_path && !esBodega(t) && !t.maps_url){
       L.push('Si no tienes el KMZ, puedes hacerlo en earth.google.com marcando el contorno del terreno, o pedirlo a quien hizo el levantamiento. La ubicación de Google Maps no nos sirve porque no marca los límites del terreno.');
     }
   } else {
@@ -3389,7 +3393,7 @@ async function calcularUbicacionTerreno(id, silencioso){
   try{
     if(btn){ btn.textContent = 'calculando…'; btn.disabled = true; }
     let polis = null, punto = false;
-    if(esBodega(t) && trArchivoTipo(t)!=='kmz' && t.maps_url){
+    if(trArchivoTipo(t)!=='kmz' && t.maps_url){
       // bodega con solo Google Maps: se calcula desde el punto (sin saber si colinda)
       const p = actCoordenadas(t.maps_url) || await actResolverCorto(t.maps_url);
       if(!p) throw new Error('No encontré las coordenadas en el enlace de Google Maps.');
