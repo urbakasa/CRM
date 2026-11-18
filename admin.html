@@ -469,11 +469,11 @@
       <button class="action" onclick="rqToggle()">+ Registrar requerimiento recibido</button>
     </div>
     <div class="card" id="rq-card" style="display:none;">
-      <h3 id="rqm-titulo">Registrar requerimiento recibido por <em>WhatsApp o correo</em></h3>
+      <h3 id="rqm-titulo">Registrar requerimiento recibido por <em>WhatsApp, correo o LinkedIn</em></h3>
       <div id="rqm-alta">
-        <label>Llegó por</label><select id="rqm-captura"><option value="whatsapp">WhatsApp</option><option value="correo">Correo</option></select>
+        <label>Llegó por</label><select id="rqm-captura"><option value="whatsapp">WhatsApp</option><option value="correo">Correo</option><option value="linkedin">LinkedIn (mensaje directo)</option></select>
         <label>1 · Pega la conversación o el correo</label>
-        <textarea id="rqm-texto" style="min-height:140px" placeholder="Pega aquí la conversación de WhatsApp o el texto del correo; tus propios mensajes se ignoran."></textarea>
+        <textarea id="rqm-texto" style="min-height:140px" placeholder="Pega aquí la conversación de WhatsApp, el texto del correo o los mensajes de LinkedIn; tus propios mensajes se ignoran."></textarea>
         <button class="action" onclick="rqLeer()">2 · Leer y llenar automáticamente</button>
         <div id="rqm-resumen" class="mr-resumen" style="display:none;"></div>
       </div>
@@ -483,7 +483,8 @@
         <div><label>Empresa</label><input id="rqm-empresa"></div>
         <div><label>Correo</label><input id="rqm-correo" type="email"></div>
         <div><label>WhatsApp (10 dígitos)</label><input id="rqm-whatsapp" inputmode="numeric"></div>
-        <div><label>Medio preferido</label><select id="rqm-canal"><option value="">Sin dato</option><option value="whatsapp">WhatsApp</option><option value="correo">Correo</option></select></div>
+        <div><label>Perfil de LinkedIn (enlace)</label><input id="rqm-linkedin" maxlength="300" placeholder="linkedin.com/in/…"></div>
+        <div><label>Medio preferido</label><select id="rqm-canal"><option value="">Sin dato</option><option value="whatsapp">WhatsApp</option><option value="correo">Correo</option><option value="linkedin">LinkedIn</option></select></div>
         <div><label>Rol</label><select id="rqm-rol"><option value="">Sin dato</option><option value="comprador">Comprador</option><option value="asesor">Asesor</option></select></div>
         <div><label>Perfil</label><select id="rqm-perfil"><option value="">Sin dato</option><option value="empresa_opera">Empresa que opera</option><option value="desarrolladora">Desarrolladora</option><option value="agroindustria">Agroindustria</option><option value="inversionista">Inversionista</option><option value="persona_fisica">Persona física</option></select></div>
         <div><label>Modalidad</label><select id="rqm-modalidad"><option value="">Sin dato</option><option value="compra">Compra</option><option value="renta">Renta</option><option value="aportacion">Aportación</option><option value="sin_definir">Sin definir</option></select></div>
@@ -493,8 +494,9 @@
         <div><label>Otro (¿cuál?)</label><input id="rqm-otro" maxlength="160"></div>
         <div><label>Estado</label><select id="rqm-estado"></select></div>
         <div><label>Municipio o zona</label><input id="rqm-municipio"></div>
-        <div><label>Superficie desde (ha)</label><input id="rqm-desde" inputmode="decimal"></div>
-        <div><label>Superficie hasta (ha, opcional)</label><input id="rqm-hasta" inputmode="decimal"></div>
+        <div><label>Superficie en</label><select id="rqm-supunidad" onchange="rqUnidadSup()"><option value="ha">Hectáreas (ha)</option><option value="m2">Metros cuadrados (m²)</option></select></div>
+        <div><label id="rqm-desde-l">Superficie desde (ha)</label><input id="rqm-desde" inputmode="decimal"></div>
+        <div><label id="rqm-hasta-l">Superficie hasta (ha, opcional)</label><input id="rqm-hasta" inputmode="decimal"></div>
         <div><label>Posibilidad de crecer</label><select id="rqm-crecer"><option value="">Sin dato</option><option value="si">Sí</option><option value="no">No</option></select></div>
         <div><label>Presupuesto</label><input id="rqm-presupuesto" inputmode="numeric"></div>
         <div><label>Moneda</label><select id="rqm-moneda"><option value="">Sin dato</option><option>MXN</option><option>USD</option></select></div>
@@ -510,6 +512,7 @@
         <div><label>Zonas que descarta</label><input id="rqm-zonas"></div>
       </div>
       <label>Descripción</label><textarea id="rqm-descripcion"></textarea>
+      <label>Servicios que necesita</label><div id="rqm-servicios"></div>
       <label>Cercanía a</label><div id="rqm-cercania"></div>
       <label>Descarta</label><div id="rqm-descarta"></div>
       <label>Otro descarte</label><input id="rqm-descartaotro">
@@ -2856,7 +2859,8 @@ const RQ_L = {
   perfil:{empresa_opera:'Empresa que opera',desarrolladora:'Desarrolladora',agroindustria:'Agroindustria',inversionista:'Inversionista',persona_fisica:'Persona física'},
   modalidad:{compra:'Compra',renta:'Renta',aportacion:'Aportación',sin_definir:'Sin definir'},
   busca:{terreno:'Terreno',proyecto:'Proyecto ya estructurado',bodega:'Bodega industrial'},
-  canal:{correo:'Correo',whatsapp:'WhatsApp'},
+  canal:{correo:'Correo',whatsapp:'WhatsApp',linkedin:'LinkedIn'},
+  servicios_req:{agua_potable:'Agua potable',drenaje:'Drenaje',luz:'Luz'},
   unidad:{total:'en total',por_ha:'por hectárea',por_m2:'por m²',mes_total:'al mes, en total',anio_ha:'por hectárea al año',mes_m2:'por m² al mes'},
   agua:{si:'Sí la necesita',no:'No la necesita',no_se:'No sabe'},
   uso_suelo:{si:'Sí',no:'No',no_se:'No sabe'},
@@ -2883,8 +2887,9 @@ function rqSupTxt(r){
   const b = r.bodega_req || {};
   if(r.busca==='bodega' && b.m2_desde) return (b.m2_hasta ? 'De '+bodN(b.m2_desde)+' a '+bodN(b.m2_hasta) : 'Desde '+bodN(b.m2_desde))+' m² construidos';
   if(!r.sup_desde_ha) return '';
-  const n = x=>Number(x).toLocaleString('es-MX');
-  return r.sup_hasta_ha ? 'De '+n(r.sup_desde_ha)+' a '+n(r.sup_hasta_ha)+' ha' : 'Desde '+n(r.sup_desde_ha)+' ha';
+  const m2 = r.sup_unidad==='m2', u = m2 ? ' m²' : ' ha';
+  const n = x=>m2 ? Math.round(Number(x)*10000).toLocaleString('es-MX') : Number(x).toLocaleString('es-MX');
+  return r.sup_hasta_ha ? 'De '+n(r.sup_desde_ha)+' a '+n(r.sup_hasta_ha)+u : 'Desde '+n(r.sup_desde_ha)+u;
 }
 function rqPresupuestoTxt(r){
   if(r.modalidad==='aportacion') return 'Aportación (sin presupuesto)';
@@ -2917,7 +2922,7 @@ function fichaRequerimiento(r, conContacto){
   if(conContacto){
     L.push(''); L.push('*Contacto*');
     L.push((r.nombre||'')+(r.empresa ? ' · '+r.empresa : '')+' — '+rqL('rol', r.rol)+(r.perfil ? ' ('+rqL('perfil', r.perfil)+')' : ''));
-    fila('Correo', r.correo); fila('WhatsApp', r.whatsapp ? trTel(r.whatsapp) : '');
+    fila('Correo', r.correo); fila('WhatsApp', r.whatsapp ? trTel(r.whatsapp) : ''); fila('LinkedIn', r.linkedin_url);
     fila('Medio preferido', rqL('canal', r.canal_preferido));
   }
   L.push(''); L.push('*Lo que busca*');
@@ -2936,6 +2941,7 @@ function fichaRequerimiento(r, conContacto){
   }
   if(r.crecer!==null && r.crecer!==undefined) fila('Posibilidad de crecer', r.crecer ? 'Sí' : 'No');
   fila('Presupuesto', rqPresupuestoTxt(r));
+  fila('Servicios', rqL('servicios_req', r.servicios_req));
   fila('Agua', rqL('agua', r.agua) + (r.agua_volumen_m3 ? ' · '+Number(r.agua_volumen_m3).toLocaleString('es-MX')+' m³ al año' : ''));
   fila('Uso de suelo autorizado', rqL('uso_suelo', r.uso_suelo_req) + (r.uso_suelo_cual ? ' · '+r.uso_suelo_cual : ''));
   fila('Energía', r.energia_carga);
@@ -3059,6 +3065,13 @@ function cruce(t, r){
     else if(t.agua==='pozo_sin_concesion') suaves.push('pozo sin concesión vigente');
     else if(t.agua==='otro') suaves.push('agua: '+(t.agua_otro || 'otro'));
   }
+  // servicios (agua potable, drenaje, luz): lo que falte o no se sepa es observación, nunca descarte
+  const sreq = (r.servicios_req||[]).filter(k=>RQ_L.servicios_req[k]);
+  if(!bodegas && sreq.length){
+    const ts = t.servicios || [];
+    if(!ts.length || ts.includes('no_se')) suaves.push('servicios: sin dato');
+    else { const faltan = sreq.filter(k=>!ts.includes(k)); if(faltan.length) suaves.push('sin '+faltan.map(k=>RQ_L.servicios_req[k].toLowerCase()).join(', ')); }
+  }
   // descartes
   const desc = r.descarta || [];
   if(desc.includes('ejidal')){
@@ -3150,12 +3163,13 @@ function renderRequerimientos(){
     const div = document.createElement('div'); div.className = 'aviso-item';
     const dh = r.etapa==='Nuevo' ? diasHabiles(r.created_at) : null;
     const chips = '<span class="tr-chip'+(r.etapa==='Nuevo'?' nuevo':'')+'">'+esc(r.etapa)+'</span>'+
-      '<span class="tr-chip">'+(r.canal_preferido==='correo'?'prefiere correo':'prefiere WhatsApp')+'</span>'+
+      '<span class="tr-chip">'+(r.canal_preferido==='correo'?'prefiere correo':(r.canal_preferido==='linkedin'?'prefiere LinkedIn':'prefiere WhatsApp'))+'</span>'+
       (r.confidencialidad ? '<span class="tr-chip" style="background:rgba(156,62,40,.15);color:var(--rust)">confidencial</span>' : '')+
       (r.rol==='asesor' ? '<span class="tr-chip">asesor</span>' : '')+
       (dh!==null ? '<span class="tr-chip" style="'+(dh>=2?'background:rgba(156,62,40,.15);color:var(--rust)':'')+'">'+dh+' día'+(dh===1?'':'s')+' hábil'+(dh===1?'':'es')+' en Nuevo</span>' : '');
     const contacto = [r.correo ? '<a href="mailto:'+esc(r.correo)+'" style="color:var(--moss)">'+esc(r.correo)+'</a>' : '',
-      r.whatsapp ? '<a href="https://wa.me/52'+esc(r.whatsapp)+'" target="_blank" rel="noopener" style="color:var(--moss)">WhatsApp '+esc(trTel(r.whatsapp))+'</a>' : ''].filter(Boolean).join(' · ');
+      r.whatsapp ? '<a href="https://wa.me/52'+esc(r.whatsapp)+'" target="_blank" rel="noopener" style="color:var(--moss)">WhatsApp '+esc(trTel(r.whatsapp))+'</a>' : '',
+      r.linkedin_url && /^https:\/\/([\w-]+\.)?linkedin\.com\//i.test(r.linkedin_url) ? '<a href="'+esc(r.linkedin_url)+'" target="_blank" rel="noopener" style="color:var(--moss)">LinkedIn</a>' : ''].filter(Boolean).join(' · ');
     const etapaSel = '<select onchange="rqEtapa(\''+r.id+'\', this.value)">'+RQ_ETAPAS.map(e=>'<option'+(e===r.etapa?' selected':'')+'>'+esc(e)+'</option>').join('')+'</select>';
     const coinc = terrenosQueCoinciden(r);
     const detalle = fichaRequerimiento(r, true).replace(/\*/g,'').split('\n').slice(2).join('\n').trim();
@@ -3239,9 +3253,16 @@ function rqPrepararForm(){
   if(!est.options.length) est.innerHTML = '<option value="">Sin dato</option>'+MR_ESTADOS.map(e=>'<option>'+esc(e)+'</option>').join('');
   const cer = document.getElementById('rqm-cercania');
   if(!cer.innerHTML) cer.innerHTML = Object.entries(RQ_L.cercania).map(([k,v])=>'<label class="check-crm" style="display:inline-flex;margin-right:12px;"><input type="checkbox" value="'+k+'"> '+esc(v)+'</label>').join('');
+  const ser = document.getElementById('rqm-servicios');
+  if(!ser.innerHTML) ser.innerHTML = Object.entries(RQ_L.servicios_req).map(([k,v])=>'<label class="check-crm" style="display:inline-flex;margin-right:12px;"><input type="checkbox" value="'+k+'"> '+esc(v)+'</label>').join('');
   const des = document.getElementById('rqm-descarta');
   if(!des.innerHTML) des.innerHTML = Object.entries(RQ_L.descarta).map(([k,v])=>'<label class="check-crm" style="display:inline-flex;margin-right:12px;"><input type="checkbox" value="'+k+'"> '+esc(v)+'</label>').join('');
   rqSubs();
+}
+function rqUnidadSup(){
+  const m2 = document.getElementById('rqm-supunidad').value==='m2';
+  document.getElementById('rqm-desde-l').textContent = 'Superficie desde ('+(m2?'m²':'ha')+')';
+  document.getElementById('rqm-hasta-l').textContent = 'Superficie hasta ('+(m2?'m²':'ha')+', opcional)';
 }
 function rqSubs(){
   const tipo = document.getElementById('rqm-tipo').value, sel = document.getElementById('rqm-sub'), act = sel.value;
@@ -3249,10 +3270,11 @@ function rqSubs(){
     habitacional:['fracc_trunco','fracc_permisos','desarrollo_vertical','lotes_urbanizados'], turistico:['hotel','residencial_turistico','ecoturistico'] }[tipo] || [];
   sel.innerHTML = '<option value="">Sin dato</option>'+subs.map(s=>'<option value="'+s+'"'+(s===act?' selected':'')+'>'+esc(TR_SUBS[s])+'</option>').join('')+'<option value="otro"'+(act==='otro'?' selected':'')+'>Otro</option>';
 }
-const RQM_CAMPOS = ['nombre','empresa','correo','whatsapp','canal','rol','perfil','modalidad','busca','tipo','sub','otro','descripcion','estado','municipio','zonas','desde','hasta','crecer','presupuesto','moneda','unidad','agua','aguavol','uso','usocual','energia','cultivo','altitud','descartaotro','plazo','notas','texto','captura'];
+const RQM_CAMPOS = ['nombre','empresa','correo','whatsapp','canal','rol','perfil','modalidad','busca','tipo','sub','otro','descripcion','estado','municipio','zonas','desde','hasta','crecer','presupuesto','moneda','unidad','agua','aguavol','uso','usocual','energia','cultivo','altitud','descartaotro','plazo','notas','texto','captura','linkedin','supunidad'];
 function rqLimpiar(){
   RQM_CAMPOS.forEach(k=>{ const e = document.getElementById('rqm-'+k); if(!e) return; if(e.tagName==='SELECT') e.selectedIndex = 0; else e.value=''; e.classList.remove('auto'); });
-  document.querySelectorAll('#rqm-cercania input, #rqm-descarta input').forEach(i=>i.checked=false);
+  document.querySelectorAll('#rqm-cercania input, #rqm-descarta input, #rqm-servicios input').forEach(i=>i.checked=false);
+  rqUnidadSup();
   ['rqm-conf','rqm-repr'].forEach(id=>document.getElementById(id).checked=false);
   rqArchivo = null; document.getElementById('rqm-doc').value=''; document.getElementById('rqm-msg').textContent='';
   document.getElementById('rqm-resumen').style.display='none';
@@ -3272,14 +3294,24 @@ function rqLeer(){
   const p = (k, id, v)=>{ if(rqMarcar(id, v)) ll.push(k); };
   p('nombre','rqm-nombre',c.nombre); p('WhatsApp','rqm-whatsapp',c.whatsapp);
   const mail = crudo.match(/[\w.+-]+@[\w-]+\.[\w.-]+/); if(mail) p('correo','rqm-correo',mail[0].toLowerCase());
+  const lin = crudo.match(/(?:https?:\/\/)?(?:[\w-]+\.)?linkedin\.com\/in\/[\w%\-.]+\/?/i);
+  if(lin){ p('LinkedIn','rqm-linkedin',(/^https?:/i.test(lin[0]) ? '' : 'https://')+lin[0]); }
   p('tipo','rqm-tipo',c.tipo); rqSubs(); if(c.sub) p('tipo de proyecto','rqm-sub',c.sub);
   if(c.oferta==='proyecto') p('busca','rqm-busca','proyecto');
   if(/\bbodega|nave industrial/.test(t)){ p('busca','rqm-busca','bodega'); p('tipo','rqm-tipo','industrial'); }
   p('estado','rqm-estado',c.estado); p('municipio','rqm-municipio',c.municipio);
   // superficie: "de 50 a 120 ha", "entre 20 y 40 hectáreas", "mínimo 30 ha"
   const rango = t.match(/(?:de|entre)\s*(\d[\d,.]*)\s*(?:ha|has|hectareas)?\s*(?:a|y|-)\s*(\d[\d,.]*)\s*(?:ha\b|has\b|hectareas)/);
+  // en m²: "de 3,000 a 5,000 m2", "mínimo 2500 metros"
+  const rm2 = t.match(/(?:de|entre)\s*(\d[\d,.]*)\s*(?:m2|m²|metros)?\s*(?:a|y|-)\s*(\d[\d,.]*)\s*(?:m2|m²|metros)/);
+  const um2 = t.match(/(\d[\d,.]*)\s*(?:m2|m²|metros cuadrados|metros)(?!\s*(?:de construccion|construidos))/);
   if(rango){ p('superficie','rqm-desde',parseFloat(rango[1].replace(/,/g,''))); p('superficie hasta','rqm-hasta',parseFloat(rango[2].replace(/,/g,''))); }
+  else if(rm2 && !/\bbodega|nave industrial/.test(t)){ p('unidad de superficie','rqm-supunidad','m2'); rqUnidadSup(); p('superficie','rqm-desde',parseFloat(rm2[1].replace(/,/g,''))); p('superficie hasta','rqm-hasta',parseFloat(rm2[2].replace(/,/g,''))); }
   else if(c.superficie) p('superficie','rqm-desde',c.superficie);
+  else if(um2 && !/\bbodega|nave industrial/.test(t)){ p('unidad de superficie','rqm-supunidad','m2'); rqUnidadSup(); p('superficie','rqm-desde',parseFloat(um2[1].replace(/,/g,''))); }
+  // servicios
+  [['agua_potable',/agua potable/],['drenaje',/drenaje/],['luz',/\bluz\b|electricidad|energia electrica/]]
+    .forEach(([k,re])=>{ if(re.test(t)){ const i = document.querySelector('#rqm-servicios input[value='+k+']'); if(i && !i.checked){ i.checked = true; ll.push('servicio: '+RQ_L.servicios_req[k]); } } });
   // modalidad
   if(/\b(aportacion|coinversion|asociarnos|socio)\b/.test(t)) p('modalidad','rqm-modalidad','aportacion');
   else if(/\b(rentar|renta|arrendar|arrendamiento)\b/.test(t)) p('modalidad','rqm-modalidad','renta');
@@ -3297,7 +3329,7 @@ function rqLeer(){
       p('unidad','rqm-unidad',unidad); }
   } else if(c.precio){ p('presupuesto','rqm-presupuesto',c.precio); p('unidad','rqm-unidad','por_ha'); p('moneda','rqm-moneda',mus?'USD':'MXN'); }
   // agua y plazo
-  if(/\b(con agua|necesit\w* agua|pozo|riego|concesion)\b/.test(t)) p('agua','rqm-agua','si');
+  if(/\b(con agua|necesit\w* agua|pozo|riego|concesion)\b/.test(t.replace(/agua potable/g,''))) p('agua','rqm-agua','si');
   if(/\b(inmediat|urgente|este mes|ya mismo|lo antes posible)/.test(t) || /\b[1-5]\s*meses\b/.test(t)) p('plazo','rqm-plazo','menos_6');
   else if(/\b(este ano|6 a 12|seis meses|un ano)\b/.test(t)) p('plazo','rqm-plazo','6_12');
   // descartes
@@ -3308,7 +3340,8 @@ function rqLeer(){
     .forEach(([k,re])=>{ if(re.test(t)){ const i = document.querySelector('#rqm-cercania input[value='+k+']'); if(i && !i.checked){ i.checked = true; ll.push('cercanía: '+RQ_L.cercania[k]); } } });
   if(c.cultivo) p('cultivo','rqm-cultivo',c.cultivo);
   if(!document.getElementById('rqm-descripcion').value){ const d = crudo.split('\n').map(x=>x.trim()).filter(x=>x.length>15)[0]; if(d) p('descripción','rqm-descripcion',d.slice(0,400)); }
-  if(mail && !c.whatsapp) p('medio','rqm-canal','correo'); else if(c.whatsapp) p('medio','rqm-canal','whatsapp');
+  if(document.getElementById('rqm-captura').value==='linkedin' && !mail && !c.whatsapp) p('medio','rqm-canal','linkedin');
+  else if(mail && !c.whatsapp) p('medio','rqm-canal','correo'); else if(c.whatsapp) p('medio','rqm-canal','whatsapp');
   const res = document.getElementById('rqm-resumen');
   res.style.display='block';
   res.innerHTML = ll.length ? 'Llené en dorado: <strong>'+esc(ll.join(', '))+'</strong>. Revisa todo antes de guardar.' : 'No encontré datos claros; llena los campos a mano.';
@@ -3317,6 +3350,8 @@ function rqLeerForm(){
   const v = id=>document.getElementById('rqm-'+id).value.trim();
   const num = x=>{ const n = parseFloat(String(x).replace(/[^\d.]/g,'')); return isNaN(n) ? null : n; };
   const chk = id=>[...document.querySelectorAll('#rqm-'+id+' input:checked')].map(i=>i.value);
+  const m2 = v('supunidad')==='m2' && v('busca')!=='bodega';
+  const aHa = x=>x===null ? null : (m2 ? Math.round(x)/10000 : x);
   return {
     nombre: v('nombre'), empresa: v('empresa')||null, correo: v('correo').toLowerCase()||null,
     whatsapp: v('whatsapp').replace(/\D/g,'').slice(-10)||null, canal_preferido: v('canal')||null,
@@ -3324,7 +3359,10 @@ function rqLeerForm(){
     perfil: v('perfil')||null, modalidad: v('modalidad')||null, busca: v('busca')||'terreno', tipo: v('tipo')||null,
     proyecto_sub: v('sub')||null, proyecto_otro: v('otro')||null, descripcion: v('descripcion')||null,
     estado: v('estado')||null, municipio: v('municipio')||null, zonas_descarta: v('zonas')||null,
-    sup_desde_ha: num(v('desde')), sup_hasta_ha: num(v('hasta')),
+    sup_unidad: v('busca')==='bodega' ? null : (v('supunidad')||'ha'),
+    sup_desde_ha: aHa(num(v('desde'))), sup_hasta_ha: aHa(num(v('hasta'))),
+    servicios_req: v('busca')==='bodega' || !chk('servicios').length ? null : chk('servicios'),
+    linkedin_url: v('linkedin')||null,
     crecer: v('crecer')==='' ? null : v('crecer')==='si',
     presupuesto: v('modalidad')==='aportacion' ? null : (num(v('presupuesto')) ? Math.round(num(v('presupuesto'))) : null),
     presupuesto_moneda: v('modalidad')==='aportacion' ? null : (v('moneda')||null),
@@ -3351,7 +3389,8 @@ async function rqGuardar(){
   const msg = document.getElementById('rqm-msg'), btn = document.getElementById('rqm-btn');
   const d = rqLeerForm();
   if(d.nombre.length < 2){ msg.style.color='var(--rust)'; msg.textContent = 'Falta el nombre.'; return; }
-  if(!d.correo && !d.whatsapp){ msg.style.color='var(--rust)'; msg.textContent = 'Escribe al menos un correo o un WhatsApp.'; return; }
+  if(!d.correo && !d.whatsapp && !d.linkedin_url){ msg.style.color='var(--rust)'; msg.textContent = 'Escribe al menos un correo, un WhatsApp o el enlace de LinkedIn.'; return; }
+  if(d.linkedin_url && !/linkedin\.com\//i.test(d.linkedin_url)){ msg.style.color='var(--rust)'; msg.textContent = 'El enlace de LinkedIn no parece de linkedin.com.'; return; }
   if(d.sup_desde_ha && d.sup_hasta_ha && d.sup_hasta_ha <= d.sup_desde_ha){ msg.style.color='var(--rust)'; msg.textContent = '«Hasta» debe ser mayor que «Desde».'; return; }
   btn.disabled = true; btn.textContent = 'Guardando…';
   try{
@@ -3382,12 +3421,15 @@ function rqEditar(id){
   set('nombre',r.nombre); set('empresa',r.empresa); set('correo',r.correo); set('whatsapp',r.whatsapp); set('canal',r.canal_preferido);
   set('rol',r.rol); set('perfil',r.perfil); set('modalidad',r.modalidad); set('busca',r.busca); set('tipo',r.tipo); rqSubs(); set('sub',r.proyecto_sub);
   set('otro',r.proyecto_otro); set('descripcion',r.descripcion); set('estado',r.estado); set('municipio',r.municipio); set('zonas',r.zonas_descarta);
-  set('desde',r.sup_desde_ha); set('hasta',r.sup_hasta_ha); set('crecer', r.crecer===null||r.crecer===undefined ? '' : (r.crecer?'si':'no'));
+  set('linkedin',r.linkedin_url); set('supunidad', r.sup_unidad==='m2' ? 'm2' : 'ha'); rqUnidadSup();
+  const enM2 = x=>x===null||x===undefined ? x : (r.sup_unidad==='m2' ? Math.round(Number(x)*10000) : x);
+  set('desde',enM2(r.sup_desde_ha)); set('hasta',enM2(r.sup_hasta_ha)); set('crecer', r.crecer===null||r.crecer===undefined ? '' : (r.crecer?'si':'no'));
   set('presupuesto',r.presupuesto); set('moneda',r.presupuesto_moneda); set('unidad',r.presupuesto_unidad); set('agua',r.agua); set('aguavol',r.agua_volumen_m3);
   set('uso',r.uso_suelo_req); set('usocual',r.uso_suelo_cual); set('energia',r.energia_carga); set('cultivo',r.cultivo); set('altitud',r.altitud);
   set('descartaotro',r.descarta_otro); set('plazo',r.plazo); set('notas',r.notas);
   (r.cercania||[]).forEach(k=>{ const i = document.querySelector('#rqm-cercania input[value='+k+']'); if(i) i.checked = true; });
   (r.descarta||[]).forEach(k=>{ const i = document.querySelector('#rqm-descarta input[value='+k+']'); if(i) i.checked = true; });
+  (r.servicios_req||[]).forEach(k=>{ const i = document.querySelector('#rqm-servicios input[value='+k+']'); if(i) i.checked = true; });
   document.getElementById('rqm-conf').checked = !!r.confidencialidad; document.getElementById('rqm-repr').checked = !!r.representa_directo;
   document.getElementById('rqm-titulo').innerHTML = 'Editar requerimiento <em>'+esc(r.folio||'')+'</em>';
   document.getElementById('rqm-btn').textContent = 'Guardar cambios';
@@ -3397,7 +3439,7 @@ function rqEditar(id){
 }
 function rqCancelar(){
   rqEditId = null; rqLimpiar(); document.getElementById('rq-card').style.display='none';
-  document.getElementById('rqm-titulo').innerHTML = 'Registrar requerimiento recibido por <em>WhatsApp o correo</em>';
+  document.getElementById('rqm-titulo').innerHTML = 'Registrar requerimiento recibido por <em>WhatsApp, correo o LinkedIn</em>';
   document.getElementById('rqm-btn').textContent = 'Registrar y asignar folio';
   document.getElementById('rqm-cancelar').style.display='none'; document.getElementById('rqm-alta').style.display='block';
 }
