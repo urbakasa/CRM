@@ -1274,6 +1274,12 @@ function trPrecioTotalTxt(t){
 }
 // Archivo de ubicación: KMZ/KML o cuadro de construcción con coordenadas UTM
 function trArchivoTipo(t){ return t.kmz_path ? (t.archivo_tipo || (t.tiene_kmz ? 'kmz' : 'cuadro')) : ''; }
+// Por qué faltan las condiciones: registros web anteriores al 6 nov 2026 (la página aún no las pedía) o capturas manuales sin terminar
+function trPendienteMotivo(t){
+  if(t.created_at && new Date(t.created_at) < new Date('2026-11-06T06:00:00Z')) return ' (registro anterior al 6 nov: pedirlas)';
+  if((t.origen||'') !== 'web') return ' (captura sin terminar)';
+  return '';
+}
 function trArchivoTxt(t){
   const a = trArchivoTipo(t);
   if(esBodega(t)){ const n = bodPlanos(t).length; return n ? n+(n===1?' plano recibido':' planos recibidos') : 'Sin planos'; }
@@ -1389,7 +1395,7 @@ function renderTerrenos(){
       '<p class="stat-sub" style="margin:2px 0;color:var(--ink);">'+esc(trOfertaTipo(t))+'</p>'+
       '<p class="stat-sub" style="margin:2px 0;">'+base+'</p>'+
       (precioTxt ? '<p class="stat-sub" style="margin:2px 0;color:var(--brass);">'+precioTxt+'</p>' : '')+
-      '<p class="stat-sub" style="margin:2px 0;">'+(t.esquema ? 'Condiciones: '+esc(trCondiciones(t)) : '<span style="color:var(--rust)">Condiciones con Urbakasa pendientes</span>')+
+      '<p class="stat-sub" style="margin:2px 0;">'+(t.esquema ? 'Condiciones: '+esc(trCondiciones(t)) : '<span style="color:var(--rust)">Condiciones con Urbakasa pendientes'+esc(trPendienteMotivo(t))+'</span>')+
         ' · '+(t.autoriza_presentacion ? 'autorizó presentarlo' : '<span style="color:var(--rust)">sin autorización de presentación</span>')+'</p>'+
       (detalle ? '<p class="stat-sub" style="margin:2px 0;">'+detalle+'</p>' : '')+
       embEstadoHTML(t)+vocTarjetaHTML(t)+ubTarjetaHTML(t)+
