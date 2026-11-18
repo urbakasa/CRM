@@ -575,6 +575,7 @@
 <script>
 const client = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 let userId = null;
+let sesionNombre = '';   // nombre de quien tiene la sesión: firma el mensaje de la embajadora
 
 const PLAN_START = new Date('2026-11-01T00:00:00');
 const END_DATE = new Date('2027-03-31T23:59:59');
@@ -613,6 +614,7 @@ async function init(){
   if(!perfil || perfil.rol !== 'admin'){ window.location.href = 'login.html'; return; }
   userId = data.session.user.id;
   document.getElementById('who-am-i').textContent = perfil.nombre || data.session.user.email;
+  sesionNombre = perfil.nombre || '';
   document.getElementById('k-fecha').value = todayISO();
   await loadAll();
   renderAll();
@@ -1640,8 +1642,8 @@ function mensajeWhatsApp(t){
   const d = datosOficiales(t);
   if(d.length){ L.push(''); d.forEach(x=>L.push(x)); }
   L.push('');
-  L.push(as ? '¿Hay algo ' + delCosa(t) + ' que no venga en el registro y que convenga tomar en cuenta?'
-            : '¿Hay algo de tu ' + cosa + ' que no venga en el registro y que te gustaría que tomemos en cuenta?');
+  L.push(as ? '¿Hay algo importante ' + delCosa(t) + ' que no venga en el registro y que convenga tomar en cuenta?'
+            : '¿Hay algo importante de tu ' + cosa + ' que no venga en el registro y que te gustaría que tomemos en cuenta?');
   return L.join('\n');
 }
 // Condiciones pendientes (registros anteriores al 6 nov y capturas): una pregunta, respuesta 1 o 2
@@ -1655,8 +1657,8 @@ function mensajeEmbajadora(t, nombreEmb){
   const nom = primerNombre(t.nombre), as = esAsesorT(t), cosa = trPalabra(t);
   const su = as ? elCosa(t) + ' de tu cliente' : 'tu ' + cosa;
   return [
-    'Hola' + (nom ? ' '+nom : '') + ', te escribe ' + (nombreEmb || '[nombre]') + ', del equipo de Urbakasa.', '',
-    'Terminamos de revisar ' + su + (t.municipio ? ' en '+t.municipio : '') + ' y ya está disponible para presentar a nuestros clientes. Te comparto el resultado del análisis.', '',
+    'Hola' + (nom ? ' '+nom : '') + ', te escribe ' + (nombreEmb || primerNombre(sesionNombre) || '[nombre]') + ', del equipo de Urbakasa.', '',
+    'Terminamos de revisar ' + su + (trPredio(t) ? (as ? ': ' : ' de ') + trPredio(t) : (t.municipio ? ' en '+t.municipio : '')) + ' y ya está disponible para presentar a nuestros clientes. Te comparto el resultado del análisis.', '',
     'Además, ponemos a tu disposición una opción para agilizar la venta:',
     'El Dictamen de Viabilidad Territorial es un análisis que permite a desarrolladores, fondos de inversión y empresas en expansión evaluar más fácil la compra; es información que piden antes de hacer una oferta.', '',
     as ? 'Te mando dos presentaciones: una para ti y otra para tu cliente, por si se la quieres compartir.'
@@ -3714,7 +3716,7 @@ async function embAsignar(terrenoId, embId){
   const { error } = await client.from('prospectos').insert({
     id: pid, created_by: embId, canal: 'embajador', estado: 'contacto', fecha: todayISO(),
     nombre: (t.nombre||'Sin nombre')+' · terreno '+(t.folio||''), telefono: t.whatsapp ? trTel(t.whatsapp) : '', tipo,
-    terreno_id: t.id, terreno_folio: t.folio || null, terreno_ficha: EMB_MSJ_INI + mensajeEmbajadora(t, (e && e.nombre) ? primerNombre(e.nombre) : '') + EMB_MSJ_FIN + embFicha(t), asignado_at: new Date().toISOString(),
+    terreno_id: t.id, terreno_folio: t.folio || null, terreno_ficha: EMB_MSJ_INI + mensajeEmbajadora(t, '[nombre]') + EMB_MSJ_FIN + embFicha(t), asignado_at: new Date().toISOString(),
     comentarios_log: [{ texto: 'Asignado por Jorge para la venta del DVT (terreno '+(t.folio||'')+').', fecha: todayISO() }]
   });
   if(error){ alert('No se pudo asignar'+(/terreno_/.test(error.message)?' (falta correr el SQL v2.7)':'')+': '+error.message); }

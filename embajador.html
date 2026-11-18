@@ -170,6 +170,7 @@
 <script>
 const client = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 let userId = null;
+let sesionNombre = '';   // firma del mensaje sugerido: el nombre de quien tiene la sesión
 let misContactos = [];
 
 async function init(){
@@ -179,6 +180,7 @@ async function init(){
   if(!perfil || perfil.rol !== 'embajador'){ window.location.href = 'login.html'; return; }
   userId = data.session.user.id;
   document.getElementById('who-am-i').textContent = perfil.nombre || data.session.user.email;
+  sesionNombre = (perfil.nombre || '').trim().split(/\s+/)[0] || '';
   await Promise.all([loadContacts(), loadAvisos()]);
 }
 
@@ -325,6 +327,7 @@ async function verTerreno(id){
   let ficha = c.terreno_ficha || '', msj = '';
   const mi = ficha.indexOf('—— Mensaje sugerido para el primer contacto ——'), mf = ficha.indexOf('—— Fin del mensaje ——');
   if(mi === 0 && mf > 0){ msj = ficha.slice(ficha.indexOf('\n')+1, mf).trim(); ficha = ficha.slice(mf + '—— Fin del mensaje ——'.length).trim(); }
+  if(msj && sesionNombre) msj = msj.replace(/te escribe [^,\n]+, del equipo de Urbakasa/, 'te escribe ' + sesionNombre + ', del equipo de Urbakasa');
   const fbox = document.getElementById('terreno-ficha');
   if(msj){
     const t = document.createElement('p'); t.style.cssText = 'margin:0 0 6px;'; t.innerHTML = '<strong>Mensaje sugerido para el primer contacto</strong> (adjunta el análisis y la presentación)';
