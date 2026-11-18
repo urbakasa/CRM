@@ -170,6 +170,7 @@
 <script>
 const client = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 let userId = null;
+let sesionNombre = '';   // firma del mensaje sugerido: el nombre de quien tiene la sesión
 let misContactos = [];
 
 async function init(){
@@ -179,6 +180,7 @@ async function init(){
   if(!perfil || perfil.rol !== 'embajador'){ window.location.href = 'login.html'; return; }
   userId = data.session.user.id;
   document.getElementById('who-am-i').textContent = perfil.nombre || data.session.user.email;
+  sesionNombre = (perfil.nombre || '').trim().split(/\s+/)[0] || '';
   await Promise.all([loadContacts(), loadAvisos()]);
 }
 
@@ -321,10 +323,24 @@ async function verTerreno(id){
     '<label style="display:block;margin-top:10px;font-size:12px;">Subir documentos (hasta 15 MB cada uno)</label><input type="file" id="asig-subir" multiple style="background:var(--field);color:var(--ink);">'+
     '<button id="asig-btn" onclick="subirDocs(\''+c.id+'\')" style="margin-top:8px;">Subir</button> '+
     '<button onclick="document.getElementById(\'terreno-modal\').remove()" style="margin-top:8px;">Cerrar</button></div>';
+  // La asignación puede traer un mensaje sugerido para el primer contacto (18 nov 2026)
+  let ficha = c.terreno_ficha || '', msj = '';
+  const mi = ficha.indexOf('—— Mensaje sugerido para el primer contacto ——'), mf = ficha.indexOf('—— Fin del mensaje ——');
+  if(mi === 0 && mf > 0){ msj = ficha.slice(ficha.indexOf('\n')+1, mf).trim(); ficha = ficha.slice(mf + '—— Fin del mensaje ——'.length).trim(); }
+  if(msj && sesionNombre) msj = msj.replace(/te escribe [^,\n]+, del equipo de Urbakasa/, 'te escribe ' + sesionNombre + ', del equipo de Urbakasa');
+  const fbox = document.getElementById('terreno-ficha');
+  if(msj){
+    const t = document.createElement('p'); t.style.cssText = 'margin:0 0 6px;'; t.innerHTML = '<strong>Mensaje sugerido para el primer contacto</strong> (adjunta el análisis y la presentación)';
+    const m = document.createElement('pre'); m.style.cssText = 'white-space:pre-wrap;margin:0 0 8px;font:13px/1.55 inherit;font-family:inherit;border-left:2px solid var(--line);padding-left:10px;'; m.textContent = msj;
+    const b = document.createElement('p'); b.style.cssText = 'margin:0 0 16px;';
+    b.innerHTML = '<button id="msj-copiar">copiar mensaje</button>' + (dig.length===10 ? ' <a href="https://wa.me/52'+dig+'?text='+encodeURIComponent(msj)+'" target="_blank" rel="noopener" class="wa-btn">abrir WhatsApp con el mensaje</a>' : '');
+    fbox.appendChild(t); fbox.appendChild(m); fbox.appendChild(b);
+    document.getElementById('msj-copiar').onclick = async ()=>{ const bt = document.getElementById('msj-copiar'); try{ await navigator.clipboard.writeText(msj); bt.textContent = '¡copiado!'; }catch(e){ bt.textContent = 'no se pudo copiar'; } setTimeout(()=>bt.textContent='copiar mensaje', 1600); };
+  }
   const pre = document.createElement('pre');
   pre.style.cssText = 'white-space:pre-wrap;margin:0;font:13px/1.55 inherit;font-family:inherit;';
-  pre.textContent = c.terreno_ficha || '';
-  document.getElementById('terreno-ficha').appendChild(pre);
+  pre.textContent = ficha;
+  fbox.appendChild(pre);
   const pinta = (el, lista, bucket)=>{ document.getElementById(el).innerHTML = lista.length ? lista.map(f=>'<p style="margin:3px 0;"><a href="#" style="color:var(--moss)" data-b="'+bucket+'" data-p="'+escH(f.path)+'" data-n="'+escH(f.nombre)+'" onclick="descargar(this.dataset.b,this.dataset.p,this.dataset.n);return false;">'+escH(f.nombre)+'</a></p>').join('') : 'Ninguno por ahora.'; };
   if(c.terreno_id){ try{ pinta('terreno-archivos', await listarTodo('kmz-terrenos', c.terreno_id), 'kmz-terrenos'); }catch(e){ document.getElementById('terreno-archivos').textContent = 'No se pudieron leer.'; } }
   else document.getElementById('terreno-archivos').textContent = 'Ninguno.';
