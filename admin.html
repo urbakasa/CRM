@@ -1399,7 +1399,9 @@ function renderTerrenos(){
       (t.conversacion ? '<details class="conv"><summary>ver conversación de WhatsApp</summary><pre>'+esc(t.conversacion)+'</pre></details>' : '')+
       '<div id="tr-notas-'+t.id+'"><p class="stat-sub" style="margin:4px 0 0;">'+(t.notas ? 'Notas: '+esc(t.notas) : '<em>Sin notas</em>')+'</p></div>'+
       '<div class="tr-acciones">'+etapaSel+
-        '<button class="edit-link tr-copiar" id="tr-copiar-'+t.id+'" onclick="copiarFicha(\''+t.id+'\')">copiar mensaje para WhatsApp</button>'+
+        '<button class="edit-link tr-copiar" id="tr-copiar-'+t.id+'" onclick="copiarFicha(\''+t.id+'\')">mensaje de Luis</button>'+
+        (!t.esquema ? '<button class="edit-link" id="tr-cond-'+t.id+'" onclick="copiarFicha(\''+t.id+'\', \'cond\')">pedir condiciones</button>' : '')+
+        '<button class="edit-link" id="tr-emb-'+t.id+'" onclick="copiarFicha(\''+t.id+'\', \'emb\')">mensaje de la embajadora</button>'+
         '<button class="edit-link" id="tr-ficha-'+t.id+'" onclick="copiarFicha(\''+t.id+'\', true)">solo ficha</button>'+
         (trArchivoTipo(t)==='kmz' ? '<button class="edit-link tr-copiar" onclick="verMapa(\''+t.id+'\')">ver en mapa</button>' : '')+
         (trArchivoTipo(t)==='cuadro' ? '<button class="edit-link tr-copiar" onclick="verCuadro(\''+t.id+'\')">ver cuadro</button>' : '')+kmz+
@@ -1596,40 +1598,77 @@ function primerNombre(n){
   const w = String(n||'').trim().split(/\s+/)[0] || '';
   return w ? w.charAt(0).toUpperCase() + w.slice(1).toLowerCase() : '';
 }
-function mensajeWhatsApp(t){
-  const nom = primerNombre(t.nombre), cosa = trPalabra(t);
-  const capturado = t.aviso_version==='captura-whatsapp';
-  const f = faltantesTerreno(t);
+// ───────── Mensajes del equipo (18 nov 2026): breves, en nombre del equipo, sin ficha ni enlaces ─────────
+const EQUIPO_FIRMA = 'Luis';   // quien atiende el WhatsApp de Urbakasa
+function esAsesorT(t){ return t.rol==='corredor' || t.rol==='asesor'; }
+// «el terreno», «la bodega»
+function elCosa(t){ return esBodega(t) ? 'la bodega' : 'el ' + trPalabra(t); }
+function delCosa(t){ return esBodega(t) ? 'de la bodega' : 'del ' + trPalabra(t); }
+function rangoFrase(km){
+  if(km===null || km===undefined || !isFinite(km)) return '';
+  if(km < 5) return 'A menos de 5 km';
+  if(km < 15) return 'Entre 5 y 15 km';
+  if(km < 30) return 'Entre 15 y 30 km';
+  return 'A más de 30 km';
+}
+// Tres datos de ubicación calculados con fuentes oficiales, en rangos (nunca coordenadas)
+function datosOficiales(t){
   const L = [];
-  L.push('Hola' + (nom ? ' '+nom : '') + ', gracias por ' + (capturado ? 'compartirnos tu '+cosa : 'registrar tu '+cosa) + '.');
-  if(f.length){
-    L.push('Ya quedó registrado con el número ' + t.folio + '.');
-    L.push('');
-    L.push('Para revisarlo contra los requerimientos que tenemos activos, solo nos falta:');
-    f.forEach(x=>L.push('• '+x));
-    L.push('');
-    L.push('Mándalo por aquí, en este mismo chat, y lo integramos a tu registro.');
-    if(!t.kmz_path && !esBodega(t) && !t.maps_url){
-      L.push('Si no tienes el KMZ, puedes hacerlo en earth.google.com marcando el contorno del terreno, o pedirlo a quien hizo el levantamiento. La ubicación de Google Maps no nos sirve porque no marca los límites del terreno.');
-    }
-  } else {
-    L.push('Ya quedó registrado con el número ' + t.folio + ' y entró a revisión: lo revisamos contra los requerimientos que tenemos activos y te avisamos por aquí si aplica.');
+  if(t.dist_carretera_km!=null) L.push(rangoFrase(t.dist_carretera_km)+' de una carretera federal');
+  if(t.dist_ciudad_km!=null) L.push(rangoFrase(t.dist_ciudad_km)+' de '+(t.ciudad_nombre || 'una ciudad de más de 100 mil habitantes'));
+  else if(t.dist_cabecera_km!=null) L.push(rangoFrase(t.dist_cabecera_km)+' de la cabecera municipal');
+  if(t.dist_aeropuerto_km!=null) L.push(rangoFrase(t.dist_aeropuerto_km)+' del aeropuerto más cercano');
+  return L.slice(0,3).map(x=>'• '+x);
+}
+function trPredio(t){
+  const sup = esBodega(t) ? (bod(t).m2_construidos ? bodN(bod(t).m2_construidos)+' m² construidos' : '') : (t.superficie_ha ? Number(t.superficie_ha).toLocaleString('es-MX')+' ha' : '');
+  return [sup, t.municipio ? 'en '+t.municipio : ''].filter(Boolean).join(' ');
+}
+// Mensaje de Luis: confirmación con datos oficiales, o lo único que falta para empezar (el KMZ)
+function mensajeWhatsApp(t){
+  const nom = primerNombre(t.nombre), as = esAsesorT(t), cosa = trPalabra(t);
+  const hola = 'Hola' + (nom ? ' '+nom : '') + ', te escribe ' + EQUIPO_FIRMA + ', del equipo de Urbakasa.';
+  const del = as ? delCosa(t) + ' de tu cliente' : 'de tu ' + cosa;
+  const sinUbicacion = !esBodega(t) && trArchivoTipo(t)!=='kmz' && !t.maps_url;
+  if(sinUbicacion){
+    return [hola + ' Tenemos el registro ' + del + (t.municipio ? ' en '+t.municipio : '') + ', con el número ' + t.folio + '.', '',
+      'Para empezar la revisión solo nos falta el KMZ del terreno. ¿Lo tienes a la mano?'].join('\n');
   }
+  const L = [hola + ' Recibimos el registro ' + del + (trPredio(t) ? (as ? ': ' : ' de ') + trPredio(t) : '') + ', con el número ' + t.folio + '.', ''];
+  L.push(as ? 'Ya está en revisión con información oficial, como lo hacen nuestros compradores antes de ofertar.'
+            : 'Ya está en revisión: lo analizamos con información oficial, como lo hacen nuestros compradores antes de hacer una oferta.');
+  const d = datosOficiales(t);
+  if(d.length){ L.push(''); d.forEach(x=>L.push(x)); }
   L.push('');
-  L.push('Revisa que tus datos estén correctos; si algo no coincide, avísanos por aquí:');
-  L.push('');
-  L.push(fichaTerreno(t));
-  if(capturado){
-    L.push('');
-    L.push('Usamos tus datos solo para revisar tu '+cosa+' contra los requerimientos de nuestros clientes, conforme a nuestro aviso de privacidad: https://urbakasa.com/aviso-de-privacidad/');
-  }
+  L.push(as ? '¿Hay algo ' + delCosa(t) + ' que no venga en el registro y que convenga tomar en cuenta?'
+            : '¿Hay algo de tu ' + cosa + ' que no venga en el registro y que te gustaría que tomemos en cuenta?');
   return L.join('\n');
+}
+// Condiciones pendientes (registros anteriores al 6 nov y capturas): una pregunta, respuesta 1 o 2
+function mensajeCondiciones(t){
+  return esAsesorT(t)
+    ? 'Para presentarlo a nuestros clientes, ¿cómo prefieres trabajar con nosotros? Responde 1 o 2:\n1. Mitad y mitad de tu comisión, más IVA.\n2. Sobreprecio de tu lado.'
+    : 'Para presentarlo a nuestros clientes, ¿cómo prefieres trabajar con nosotros? Responde 1 o 2:\n1. Nos das el precio que quieres recibir y nuestro margen va encima.\n2. Comisión sobre el precio de venta, más IVA.';
+}
+// Primer mensaje de la embajadora: el análisis ya hecho y el Dictamen como opción (texto de Jorge, 18 nov)
+function mensajeEmbajadora(t, nombreEmb){
+  const nom = primerNombre(t.nombre), as = esAsesorT(t), cosa = trPalabra(t);
+  const su = as ? elCosa(t) + ' de tu cliente' : 'tu ' + cosa;
+  return [
+    'Hola' + (nom ? ' '+nom : '') + ', te escribe ' + (nombreEmb || '[nombre]') + ', del equipo de Urbakasa.', '',
+    'Terminamos de revisar ' + su + (t.municipio ? ' en '+t.municipio : '') + ' y ya está disponible para presentar a nuestros clientes. Te comparto el resultado del análisis.', '',
+    'Además, ponemos a tu disposición una opción para agilizar la venta:',
+    'El Dictamen de Viabilidad Territorial es un análisis que permite a desarrolladores, fondos de inversión y empresas en expansión evaluar más fácil la compra; es información que piden antes de hacer una oferta.', '',
+    as ? 'Te mando dos presentaciones: una para ti y otra para tu cliente, por si se la quieres compartir.'
+       : 'Te comparto la presentación para que conozcas cómo funciona.',
+    'Es opcional, te invito a leerlo y con gusto aclaramos las preguntas que surjan.'
+  ].join('\n');
 }
 async function copiarFicha(id, soloFicha){
   const t = terrenos.find(x=>x.id===id);
-  const texto = soloFicha ? fichaTerreno(t) : mensajeWhatsApp(t);
+  const texto = soloFicha==='emb' ? mensajeEmbajadora(t) : (soloFicha==='cond' ? mensajeCondiciones(t) : (soloFicha ? fichaTerreno(t) : mensajeWhatsApp(t)));
   const ok = await copiarTexto(texto);
-  const btn = document.getElementById((soloFicha ? 'tr-ficha-' : 'tr-copiar-')+id);
+  const btn = document.getElementById((soloFicha==='emb' ? 'tr-emb-' : soloFicha==='cond' ? 'tr-cond-' : soloFicha ? 'tr-ficha-' : 'tr-copiar-')+id);
   if(!ok){ alert('No se pudo copiar automáticamente. Copia este texto:\n\n'+texto); return; }
   if(btn){ const antes = btn.textContent; btn.textContent = 'copiado ✓ pégalo en el chat'; setTimeout(()=>{ btn.textContent = antes; }, 2500); }
 }
@@ -3641,6 +3680,7 @@ function embAsignacionHTML(t){
   });
   return h+'<div id="emb-box-'+t.id+'"></div>';
 }
+const EMB_MSJ_INI = '—— Mensaje sugerido para el primer contacto ——\n', EMB_MSJ_FIN = '\n—— Fin del mensaje ——\n\n';
 function embFicha(t){
   // ficha para el embajador: datos del terreno y contacto, sin condiciones con Urbakasa ni notas internas
   return fichaTerreno(t).replace(/\*/g,'').split('\n').filter(l=>!/^(Condiciones con Urbakasa|Autorización)/.test(l)).join('\n');
@@ -3674,7 +3714,7 @@ async function embAsignar(terrenoId, embId){
   const { error } = await client.from('prospectos').insert({
     id: pid, created_by: embId, canal: 'embajador', estado: 'contacto', fecha: todayISO(),
     nombre: (t.nombre||'Sin nombre')+' · terreno '+(t.folio||''), telefono: t.whatsapp ? trTel(t.whatsapp) : '', tipo,
-    terreno_id: t.id, terreno_folio: t.folio || null, terreno_ficha: embFicha(t), asignado_at: new Date().toISOString(),
+    terreno_id: t.id, terreno_folio: t.folio || null, terreno_ficha: EMB_MSJ_INI + mensajeEmbajadora(t, (e && e.nombre) ? primerNombre(e.nombre) : '') + EMB_MSJ_FIN + embFicha(t), asignado_at: new Date().toISOString(),
     comentarios_log: [{ texto: 'Asignado por Jorge para la venta del DVT (terreno '+(t.folio||'')+').', fecha: todayISO() }]
   });
   if(error){ alert('No se pudo asignar'+(/terreno_/.test(error.message)?' (falta correr el SQL v2.7)':'')+': '+error.message); }
