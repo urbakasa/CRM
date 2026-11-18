@@ -338,6 +338,11 @@
       <div class="grid3" id="terrenos-resumen" style="margin-top:14px;"></div>
       <button class="action" id="mr-toggle" onclick="toggleRegistroManual()">+ Registrar terreno recibido por WhatsApp</button>
     </div>
+    <div class="card" id="hoy-card" style="display:none;">
+      <h3>Por enviar <em>hoy</em></h3>
+      <p class="stat-sub">Registros nuevos que esperan el mensaje de Luis. Propietarios directos primero, luego por antigüedad. «Abrir WhatsApp» abre el chat con el mensaje escrito; después de enviarlo, «marcar enviado» lo pasa a Confirmado.</p>
+      <div id="hoy-lista"></div>
+    </div>
     <div class="card" id="mr-card" style="display:none;">
       <h3 id="mr-titulo">Registrar terreno recibido por <em>WhatsApp</em></h3>
       <p class="stat-sub" id="mr-intro">Para quienes mandaron su información por WhatsApp antes de que existiera la página. Recibe folio igual que un registro web y queda marcado como capturado por Urbakasa (sin aceptación del aviso de privacidad).</p>
@@ -1181,7 +1186,8 @@ async function deleteLead(id){
 }
 
 // ───────── Terrenos (registro-terreno en urbakasa.com) ─────────
-const TR_ETAPAS = ['Nuevo','Datos completos','Aplica requerimiento','Candidato red','Hoy no','DVT solicitado'];
+// v2.12: «Confirmado» (Luis ya mandó su mensaje) y «Análisis enviado» (la embajadora ya mandó el análisis y la opción del Dictamen)
+const TR_ETAPAS = ['Nuevo','Confirmado','Datos completos','Aplica requerimiento','Análisis enviado','Candidato red','DVT solicitado','Hoy no'];
 const TR_L = {
   tipo:{agricola:'Agrícola',industrial:'Industrial',habitacional:'Habitacional',turistico:'Turístico',otro:'Otro'},
   rol:{propietario:'Propietario',corredor:'Corredor',asesor:'Asesor inmobiliario'},
@@ -1327,8 +1333,35 @@ function prepararFiltrosTerrenos(){
   if(origenes.includes(actual)) origenSel.value = actual;
 }
 
+// Lista diaria de Luis: registros en «Nuevo», propietarios directos primero y luego los más antiguos
+function renderPorEnviarHoy(){
+  const card = document.getElementById('hoy-card'), box = document.getElementById('hoy-lista');
+  if(!card) return;
+  const lista = terrenos.filter(t=>t.etapa==='Nuevo')
+    .sort((a,b)=> ((a.rol==='propietario'?0:1) - (b.rol==='propietario'?0:1)) || (new Date(a.created_at) - new Date(b.created_at)));
+  card.style.display = lista.length ? '' : 'none';
+  box.innerHTML = lista.map(t=>{
+    const dig = String(t.whatsapp||'').replace(/\D/g,'').slice(-10);
+    const falta = !esBodega(t) && trArchivoTipo(t)!=='kmz' && !t.maps_url, ret = esParaRetomar(t);
+    const msj = ret ? mensajeRetomar(t) : mensajeWhatsApp(t);
+    return '<div class="aviso-item" style="padding:8px 0;">'+
+      '<p class="stat-sub" style="margin:0;"><strong>'+esc(t.folio||'')+'</strong> · '+esc(t.nombre||'Sin nombre')+' · '+esc(trLabel('rol',t.rol))+' · '+esc([trPredio(t), t.estado].filter(Boolean).join(', '))+
+        (ret ? ' · <span style="color:var(--brass)">retomar</span>' : '')+
+        (falta ? ' · <span style="color:var(--rust)">pide el KMZ</span>' : (ret ? '' : t.dist_carretera_km==null && t.dist_ciudad_km==null ? ' · <span style="color:var(--rust)">sin datos de ubicación: calcúlalos antes</span>' : ''))+'</p>'+
+      '<div class="tr-acciones" style="margin-top:4px;">'+
+        (dig.length===10 ? '<a class="edit-link tr-copiar" href="https://wa.me/52'+dig+'?text='+encodeURIComponent(msj)+'" target="_blank" rel="noopener">abrir WhatsApp</a>' : '<span class="stat-sub">sin WhatsApp válido</span>')+
+        '<button class="edit-link" id="hoy-copiar-'+t.id+'" onclick="copiarHoy(\''+t.id+'\')">copiar mensaje</button>'+
+        '<button class="edit-link" onclick="updateEtapaTerreno(\''+t.id+'\', \'Confirmado\')">marcar enviado</button>'+
+      '</div></div>';
+  }).join('');
+}
+async function copiarHoy(id){
+  const t = terrenos.find(x=>x.id===id), ok = await copiarTexto(esParaRetomar(t) ? mensajeRetomar(t) : mensajeWhatsApp(t)), b = document.getElementById('hoy-copiar-'+id);
+  if(b){ const a = b.textContent; b.textContent = ok ? '¡copiado!' : 'no se pudo copiar'; setTimeout(()=>b.textContent=a, 1600); }
+}
 function renderTerrenos(){
   prepararFiltrosTerrenos();
+  renderPorEnviarHoy();
   const body = document.getElementById('terrenos-body');
   const empty = document.getElementById('terrenos-empty');
   const nuevos = terrenos.filter(t=>t.etapa==='Nuevo').length;
@@ -1646,6 +1679,15 @@ function mensajeWhatsApp(t){
             : '¿Hay algo importante de tu ' + cosa + ' que no venga en el registro y que te gustaría que tomemos en cuenta?');
   return L.join('\n');
 }
+// Para retomar registros que no respondieron (texto de Jorge, 18 nov): una pregunta que se contesta con una palabra
+function mensajeRetomar(t){
+  const nom = primerNombre(t.nombre), as = esAsesorT(t);
+  const suyo = as ? (esBodega(t) ? 'la de tu cliente' : 'el de tu cliente') : (esBodega(t) ? 'la tuya' : 'el tuyo');
+  return 'Hola' + (nom ? ' '+nom : '') + ', te escribe ' + EQUIPO_FIRMA + ', del equipo de Urbakasa. Estamos preparando la cartera de ' + (esBodega(t) ? 'bodegas' : 'terrenos') +
+    ' que presentaremos a nuestros clientes y tenemos ' + suyo + (t.municipio ? ' en '+t.municipio : '') + '. ' + (as ? '¿Sigue disponible?' : '¿Sigue disponible para venta?');
+}
+// Registro que lleva más de 5 días hábiles en «Nuevo»: ya se le escribió antes; se retoma en lugar de confirmar
+function esParaRetomar(t){ return t.etapa==='Nuevo' && diasHabiles(t.created_at) > 5; }
 // Condiciones pendientes (registros anteriores al 6 nov y capturas): una pregunta, respuesta 1 o 2
 function mensajeCondiciones(t){
   return esAsesorT(t)
