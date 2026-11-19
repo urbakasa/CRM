@@ -366,13 +366,14 @@
         <div id="mr-otro-box"><label>¿Cuál?</label><input id="mr-otro" maxlength="120"></div>
         <div><label>Estado</label><select id="mr-estado"></select></div>
         <div><label>Municipio</label><input id="mr-mun"></div>
-        <div><label>Superficie (ha)</label><input id="mr-sup" type="number" min="0" step="0.01"></div>
+        <div><label>Superficie en</label><select id="mr-supunidad" onchange="mrUnidadSup()"><option value="ha">Hectáreas (ha)</option><option value="m2">Metros cuadrados (m²)</option></select></div>
+        <div><label id="mr-sup-l">Superficie (ha)</label><input id="mr-sup" type="number" min="0" step="any"></div>
         <div id="mr-cult-box"><label>Qué se siembra hoy</label><input id="mr-cult"></div>
         <div><label>Agua</label><select id="mr-agua"><option value="">Sin dato</option></select></div>
         <div><label>Agua · si es «Otro», ¿cuál?</label><input id="mr-agua-otro" type="text" maxlength="120"></div>
         <div><label>Documentos del terreno</label><select id="mr-reg"><option value="escritura">Con escritura</option><option value="ejidal">Ejidal</option><option value="sucesion">En sucesión</option><option value="no_se">No sabe</option></select></div>
-        <div><label>Disponible para</label><select id="mr-disp"><option value="venta">Venta</option><option value="renta">Renta</option><option value="aportacion">Aportación a un proyecto</option><option value="abierto">Abierto a opciones</option></select></div>
-        <div><label>Precio por ha (MXN; renta: por año)</label><input id="mr-precio" inputmode="numeric" placeholder="vacío = sin definir"></div>
+        <div><label>Disponible para</label><select id="mr-disp" onchange="mrUnidadSup()"><option value="venta">Venta</option><option value="renta">Renta</option><option value="aportacion">Aportación a un proyecto</option><option value="abierto">Abierto a opciones</option></select></div>
+        <div><label id="mr-precio-l">Precio por ha (MXN; renta: por año)</label><input id="mr-precio" inputmode="numeric" placeholder="vacío = sin definir"></div>
       </div>
       <h3 style="margin-top:18px;">Condiciones con Urbakasa</h3>
       <div class="grid2">
@@ -1270,18 +1271,35 @@ function trOfertaTipo(t){
   const sub = trProyectoSub(t);
   return base + (sub ? ' · '+sub : '');
 }
-// Precio por hectárea (en renta: por hectárea al año)
-function trPrecioUnidad(t){ return t.disponibilidad==='renta' ? ' MXN por ha al año' : ' MXN por ha'; }
-function trPrecioTotal(t){ return (t.precio_ha && t.superficie_ha) ? Number(t.precio_ha)*Number(t.superficie_ha) : null; }
+// Superficie y precio: se guardan en hectáreas (precio por ha; renta por ha al año). Con sup_unidad 'm2' (v2.14)
+// se muestran como se registraron: m², precio por m² y renta por m² al mes.
+function trM2(t){ return !esBodega(t) && t.sup_unidad==='m2'; }
+function trSupTxt(t){
+  if(!t.superficie_ha) return '';
+  return trM2(t) ? Math.round(Number(t.superficie_ha)*10000).toLocaleString('es-MX')+' m²' : Number(t.superficie_ha).toLocaleString('es-MX')+' ha';
+}
+function trPrecioVal(t){
+  if(!t.precio_ha) return null;
+  return trM2(t) ? Math.round(Number(t.precio_ha)/10000/(t.disponibilidad==='renta' ? 12 : 1)*100)/100 : Number(t.precio_ha);
+}
+function trPrecioUnidad(t){
+  if(trM2(t)) return t.disponibilidad==='renta' ? ' MXN por m² al mes' : ' MXN por m²';
+  return t.disponibilidad==='renta' ? ' MXN por ha al año' : ' MXN por ha';
+}
+function trPrecioTotal(t){
+  if(!(t.precio_ha && t.superficie_ha)) return null;
+  const tot = Number(t.precio_ha)*Number(t.superficie_ha);
+  return trM2(t) && t.disponibilidad==='renta' ? tot/12 : tot;
+}
 function trPrecio(t){
   if(esBodega(t)){ const p = bodPrecios(t); return p.length ? p.join(' · ') : (t.precio_definido===false ? 'Precio sin definir' : ''); }
-  if(t.precio_ha) return fmt(t.precio_ha)+trPrecioUnidad(t);
+  if(t.precio_ha) return fmt(trPrecioVal(t))+trPrecioUnidad(t);
   if(t.precio_definido===false) return 'Precio sin definir';
   return '';
 }
 function trPrecioTotalTxt(t){
   const tot = trPrecioTotal(t);
-  return tot ? fmt(tot)+' MXN'+(t.disponibilidad==='renta' ? ' al año' : '') : '';
+  return tot ? fmt(tot)+' MXN'+(t.disponibilidad==='renta' ? (trM2(t) ? ' al mes' : ' al año') : '') : '';
 }
 // Archivo de ubicación: KMZ/KML o cuadro de construcción con coordenadas UTM
 function trArchivoTipo(t){ return t.kmz_path ? (t.archivo_tipo || (t.tiene_kmz ? 'kmz' : 'cuadro')) : ''; }
@@ -1409,7 +1427,7 @@ function renderTerrenos(){
     const wa = String(t.whatsapp||'').replace(/\D/g,'');
     const waLink = wa ? '<a href="https://wa.me/52'+esc(wa)+'" target="_blank" rel="noopener" style="color:var(--moss);">WhatsApp '+esc(trTel(wa))+'</a>' : '';
     const sup = esBodega(t) ? (bod(t).m2_construidos ? bodN(bod(t).m2_construidos)+' m² construidos' : 'superficie no indicada')
-      : (t.superficie_ha ? Number(t.superficie_ha).toLocaleString('es-MX')+' ha' : 'superficie no indicada');
+      : (trSupTxt(t) || 'superficie no indicada');
     const base = [esc(t.municipio)+', '+esc(t.estado), sup, esc(trLabel('disponibilidad',t.disponibilidad)), esc(trLabel('regimen',t.regimen))].filter(Boolean).join(' · ');
     const precioTxt = trPrecio(t) ? esc(trPrecio(t)) + (trPrecioTotalTxt(t) ? ' · total aprox. '+esc(trPrecioTotalTxt(t)) : '') : '';
     const detalle = (esBodega(t) ? bodFilas(t).filter(x=>x[0]!=='Superficie construida').map(x=>x[0]+': '+x[1]) : trDetalle(t)).map(esc).join(' · ');
@@ -1495,7 +1513,7 @@ function terrenosFiltrados(){
 // Ficha ordenada para pegar en el chat del contacto (formato de WhatsApp: *negritas*)
 function fichaTerreno(t){
   const fecha = new Date(t.created_at).toLocaleDateString('es-MX',{ timeZone:'America/Mexico_City', day:'numeric', month:'long', year:'numeric' });
-  const sup = t.superficie_ha ? Number(t.superficie_ha).toLocaleString('es-MX')+' ha' : 'No indicada';
+  const sup = trSupTxt(t) || 'No indicada';
   const filas = [];
   const fila = (nombre, valor)=>{ if(valor) filas.push(nombre+': '+valor); };
   if(esBodega(t)){
@@ -1529,10 +1547,12 @@ function fichaTerreno(t){
   fila('Uso de suelo', trLabel('uso_suelo',t.uso_suelo));
   fila('Situación legal', t.regimen==='no_se' ? 'No sabe' : trLabel('regimen',t.regimen));
   fila('Disponible para', trLabel('disponibilidad',t.disponibilidad));
-  const etqPrecio = t.esquema==='precio_neto' ? (t.disponibilidad==='renta' ? 'Renta por hectárea al año, antes de impuestos' : 'Precio por hectárea, antes de impuestos')
-    : t.esquema==='sobreprecio' ? (t.disponibilidad==='renta' ? 'Renta por hectárea al año del lado vendedor, antes de impuestos del propietario' : 'Precio por hectárea del lado vendedor, antes de impuestos del propietario')
-    : (t.disponibilidad==='renta' ? 'Renta por hectárea al año' : 'Precio por hectárea');
-  fila(etqPrecio, t.precio_ha ? fmt(t.precio_ha)+' MXN' : (t.precio_definido===false ? 'Sin definir' : ''));
+  const porU = trM2(t) ? (t.disponibilidad==='renta' ? 'por m² al mes' : 'por m²') : (t.disponibilidad==='renta' ? 'por hectárea al año' : 'por hectárea');
+  const base = (t.disponibilidad==='renta' ? 'Renta ' : 'Precio ')+porU;
+  const etqPrecio = t.esquema==='precio_neto' ? base+', antes de impuestos'
+    : t.esquema==='sobreprecio' ? base+' del lado vendedor, antes de impuestos del propietario'
+    : base;
+  fila(etqPrecio, t.precio_ha ? fmt(trPrecioVal(t))+' MXN' : (t.precio_definido===false ? 'Sin definir' : ''));
   fila('Total aproximado', trPrecioTotalTxt(t));
   fila('KMZ', trArchivoTxt(t));
   fila('Google Maps', t.maps_url);
@@ -1619,8 +1639,8 @@ function faltantesTerreno(t){
     return f;
   }
   if(trArchivoTipo(t)!=='kmz' && !t.maps_url) f.push('El KMZ del terreno (los planos y el cuadro de construcción no nos sirven para ubicarlo).');
-  if(!t.superficie_ha) f.push('La superficie en hectáreas.');
-  if(!t.precio_ha && t.precio_definido!==false) f.push(t.disponibilidad==='renta' ? 'La renta por hectárea al año.' : 'El precio por hectárea.');
+  if(!t.superficie_ha) f.push(trM2(t) ? 'La superficie en m².' : 'La superficie en hectáreas.');
+  if(!t.precio_ha && t.precio_definido!==false) f.push(trM2(t) ? (t.disponibilidad==='renta' ? 'La renta por m² al mes.' : 'El precio por m².') : (t.disponibilidad==='renta' ? 'La renta por hectárea al año.' : 'El precio por hectárea.'));
   if(!t.agua && ['agricola','industrial','turistico'].includes(t.tipo)) f.push('De dónde obtiene el agua (pozo con o sin concesión, pozo artesiano o artesanal, noria, acuerdo con un vecino, canal, río, presa, reservorio o temporal).');
   if(t.agua==='pozo_sin_concesion') f.push('La situación del pozo: si la concesión está en trámite, vencida o nunca se ha tramitado.');
   if(t.agua==='otro' && !t.agua_otro) f.push('De dónde obtiene el agua.');
@@ -1665,7 +1685,7 @@ function datosOficiales(t){
   return L.slice(0,3).map(x=>'• '+x);
 }
 function trPredio(t){
-  const sup = esBodega(t) ? (bod(t).m2_construidos ? bodN(bod(t).m2_construidos)+' m² construidos' : '') : (t.superficie_ha ? Number(t.superficie_ha).toLocaleString('es-MX')+' ha' : '');
+  const sup = esBodega(t) ? (bod(t).m2_construidos ? bodN(bod(t).m2_construidos)+' m² construidos' : '') : trSupTxt(t);
   return [sup, t.municipio ? 'en '+t.municipio : ''].filter(Boolean).join(' ');
 }
 // Mensaje de Luis: confirmación con datos oficiales, o lo único que falta para empezar (el KMZ)
@@ -1764,6 +1784,7 @@ function descargarTerrenosExcel(){
     ['Estado', t=>t.estado],
     ['Municipio', t=>t.municipio],
     ['Superficie (ha)', t=>t.superficie_ha],
+    ['Superficie como se registró', t=>esBodega(t) ? '' : trSupTxt(t)],
     ['Bodega', t=>esBodega(t) ? bodFilas(t).map(x=>x[0]+': '+x[1]).join(' · ') : ''],
     ['Bodega: precios', t=>esBodega(t) ? bodPrecios(t).join(' · ') : ''],
     ['Google Maps', t=>t.maps_url],
@@ -1778,6 +1799,7 @@ function descargarTerrenosExcel(){
     ['Régimen', t=>t.regimen==='no_se' ? 'No sabe' : trLabel('regimen',t.regimen)],
     ['Disponible para', t=>trLabel('disponibilidad',t.disponibilidad)],
     ['Precio por ha (MXN; renta: por año)', t=>t.precio_ha ? t.precio_ha : (t.precio_definido===false ? 'Sin definir' : '')],
+    ['Precio como se registró', t=>esBodega(t) ? '' : (t.precio_ha ? trPrecio(t) : '')],
     ['Total aproximado (MXN)', t=>trPrecioTotal(t)],
     ['Esquema con Urbakasa', t=>trCondCorto(t) || 'Pendiente'],
     ['Comisión del propietario (%)', t=>t.comision_pct],
@@ -1819,6 +1841,14 @@ const MR_SUBS = {
 };
 const MR_ESTADOS = ['Aguascalientes','Baja California','Baja California Sur','Campeche','Chiapas','Chihuahua','Ciudad de México','Coahuila','Colima','Durango','Estado de México','Guanajuato','Guerrero','Hidalgo','Jalisco','Michoacán','Morelos','Nayarit','Nuevo León','Oaxaca','Puebla','Querétaro','Quintana Roo','San Luis Potosí','Sinaloa','Sonora','Tabasco','Tamaulipas','Tlaxcala','Veracruz','Yucatán','Zacatecas'];
 let mrListo = false;
+function mrUnidadSup(){
+  const m2 = document.getElementById('mr-supunidad').value==='m2', renta = document.getElementById('mr-disp').value==='renta';
+  document.getElementById('mr-sup-l').textContent = m2 ? 'Superficie (m²)' : 'Superficie (ha)';
+  document.getElementById('mr-precio-l').textContent = m2 ? (renta ? 'Renta por m² al mes (MXN)' : 'Precio por m² (MXN)') : (renta ? 'Renta por ha al año (MXN)' : 'Precio por ha (MXN)');
+}
+// Lo capturado en el formulario, convertido a hectáreas para guardar
+function mrSupHa(){ const n = parseFloat(document.getElementById('mr-sup').value); if(isNaN(n) || n<=0) return null; return document.getElementById('mr-supunidad').value==='m2' ? Math.round(n)/10000 : n; }
+function mrPrecioHa(precio){ if(!(precio > 0)) return null; if(document.getElementById('mr-supunidad').value!=='m2') return precio; return precio*10000*(document.getElementById('mr-disp').value==='renta' ? 12 : 1); }
 function mrPreparar(){
   if(mrListo) return; mrListo = true;
   setTimeout(mrCondiciones, 0);
@@ -1853,9 +1883,10 @@ function editarTerreno(id){
   set('mr-oferta',t.oferta||'terreno'); set('mr-tipo',t.tipo||'agricola'); mrAplicar();
   if(t.proyecto_sub) set('mr-sub',t.proyecto_sub); mrAplicar(); set('mr-otro',t.proyecto_otro);
   if(t.estado && !MR_ESTADOS.includes(t.estado)){ const o = document.createElement('option'); o.textContent = t.estado; document.getElementById('mr-estado').appendChild(o); }
-  set('mr-estado',t.estado); set('mr-mun',t.municipio); set('mr-sup',t.superficie_ha); set('mr-cult',t.cultivo);
+  set('mr-supunidad', trM2(t) ? 'm2' : 'ha');
+  set('mr-estado',t.estado); set('mr-mun',t.municipio); set('mr-sup', t.superficie_ha ? (trM2(t) ? Math.round(Number(t.superficie_ha)*10000) : t.superficie_ha) : ''); set('mr-cult',t.cultivo);
   set('mr-agua',t.agua||''); set('mr-agua-otro',t.agua_otro||''); set('mr-reg',t.regimen||'no_se'); set('mr-disp',t.disponibilidad||'venta');
-  set('mr-precio', t.precio_ha ? Number(t.precio_ha).toLocaleString('es-MX') : '');
+  set('mr-precio', t.precio_ha ? trPrecioVal(t).toLocaleString('es-MX') : ''); mrUnidadSup();
   set('mr-esquema', t.esquema||''); set('mr-com', t.comision_pct); set('mr-pac', t.comision_pactada_pct); set('mr-rep', t.reparto_pct);
   document.getElementById('mr-aut').checked = !!t.autoriza_presentacion; mrCondiciones();
   document.getElementById('mr-card').scrollIntoView({ behavior:'smooth', block:'start' });
@@ -1882,10 +1913,10 @@ async function guardarEdicion(){
   const cambios = {
     nombre: v('mr-nombre'), whatsapp: wa, rol: v('mr-rol'), oferta: v('mr-oferta'), tipo: tp,
     proyecto_sub: proy && MR_SUBS[tp] ? v('mr-sub') : null, proyecto_otro: otroVisible ? v('mr-otro') : null,
-    estado: v('mr-estado'), municipio: v('mr-mun'), superficie_ha: v('mr-sup') || null,
+    estado: v('mr-estado'), municipio: v('mr-mun'), superficie_ha: mrSupHa(), sup_unidad: v('mr-supunidad')==='m2' ? 'm2' : 'ha',
     cultivo: tp==='agricola' ? (v('mr-cult') || null) : null, agua: v('mr-agua') || null, agua_otro: v('mr-agua')==='otro' ? (v('mr-agua-otro') || null) : null,
     regimen: v('mr-reg'), disponibilidad: v('mr-disp'),
-    precio_ha: precio > 0 ? precio : null,
+    precio_ha: mrPrecioHa(precio),
     precio_definido: precio > 0 ? true : (t.precio_definido===false ? false : null)
   };
   Object.assign(cambios, mrCondValores());
@@ -2298,6 +2329,7 @@ async function mrLeer(){
   const municipio = c.municipio || (kmzUbic && kmzUbic.municipio);
   poner('estado','mr-estado',estado); poner('municipio','mr-mun',municipio);
   const sup = c.superficie || kmzHa;
+  if(sup){ document.getElementById('mr-supunidad').value = 'ha'; mrUnidadSup(); }
   poner('superficie','mr-sup',sup);
   if(c.superficie && kmzHa && Math.abs(c.superficie-kmzHa)/kmzHa > 0.1) avisos.push('La conversación dice '+c.superficie.toLocaleString('es-MX')+' ha, pero el contorno del KMZ mide '+kmzHa.toLocaleString('es-MX')+' ha.');
   if(c.municipio && kmzUbic && kmzUbic.municipio && c.municipio.toLowerCase()!==kmzUbic.municipio.toLowerCase()) avisos.push('La conversación dice '+c.municipio+', pero el KMZ cae en '+kmzUbic.municipio+', '+kmzUbic.estado+'.');
@@ -2372,10 +2404,10 @@ async function guardarRegistroManual(){
   const p = {
     id: id, nombre: v('mr-nombre'), whatsapp: wa, rol: v('mr-rol'), oferta: v('mr-oferta'), tipo: t,
     proyecto_sub: sub, proyecto_otro: otroVisible ? v('mr-otro') : null,
-    estado: v('mr-estado'), municipio: v('mr-mun'), superficie_ha: v('mr-sup') || null,
+    estado: v('mr-estado'), municipio: v('mr-mun'), superficie_ha: mrSupHa(), sup_unidad: v('mr-supunidad')==='m2' ? 'm2' : 'ha',
     cultivo: t==='agricola' ? v('mr-cult') : null, agua: v('mr-agua') || null, agua_otro: v('mr-agua')==='otro' ? (v('mr-agua-otro') || null) : null,
     regimen: v('mr-reg'), disponibilidad: v('mr-disp'),
-    precio_ha: precio > 0 ? precio : null, precio_definido: precio > 0,
+    precio_ha: mrPrecioHa(precio), precio_definido: precio > 0,
     archivo_tipo: (principal && principal.tipo==='kmz') ? 'kmz' : null, kmz_path: (principal && principal.tipo==='kmz') ? principal.path : null,
     archivos: adjuntos, conversacion: document.getElementById('mr-texto').value.trim() || null,
     notas: v('mr-notas') || null, origen: 'whatsapp'
@@ -2389,6 +2421,7 @@ async function guardarRegistroManual(){
     return;
   }
   ['mr-texto','mr-nombre','mr-wa','mr-otro','mr-mun','mr-sup','mr-cult','mr-agua-otro','mr-precio','mr-notas','mr-esquema','mr-com','mr-pac','mr-rep'].forEach(x=>document.getElementById(x).value='');
+  document.getElementById('mr-supunidad').value = 'ha'; mrUnidadSup();
   document.getElementById('mr-aut').checked = false; mrCondiciones();
   document.querySelectorAll('#mr-card .auto').forEach(e=>e.classList.remove('auto'));
   mrArchivos = []; mrPintarArchivos(); document.getElementById('mr-resumen').style.display='none';
@@ -2432,7 +2465,7 @@ async function verMapa(id){
   const t = terrenos.find(x=>x.id===id);
   const modal = document.getElementById('mapa-modal'), info = document.getElementById('mapa-info');
   document.getElementById('mapa-folio').textContent = t.folio || '';
-  document.getElementById('mapa-titulo').textContent = '· ' + [t.municipio, t.estado].filter(Boolean).join(', ') + (t.superficie_ha ? ' · '+Number(t.superficie_ha).toLocaleString('es-MX')+' ha registradas' : '');
+  document.getElementById('mapa-titulo').textContent = '· ' + [t.municipio, t.estado].filter(Boolean).join(', ') + (t.superficie_ha ? ' · '+trSupTxt(t)+' registrad'+(trM2(t)?'os':'as') : '');
   info.textContent = 'Cargando el contorno…';
   modal.style.display = 'flex';
   try{
@@ -3096,7 +3129,7 @@ function cruceHTML(lista, tipoLista){
     if(tipoLista==='terrenos'){
       return '<p class="stat-sub" style="margin:3px 0;">'+chip+'<strong>'+esc(o.folio||'')+'</strong> · '+esc(trOfertaTipo(o))+' · '+esc([o.municipio,o.estado].filter(Boolean).join(', '))+
         (esBodega(o) ? (bodResumen(o) ? ' · '+esc(bodResumen(o)) : '')+(bodPrecios(o).length ? ' · '+esc(bodPrecios(o).join(' · ')) : '')
-          : (o.superficie_ha ? ' · '+Number(o.superficie_ha).toLocaleString('es-MX')+' ha' : '')+(o.precio_ha ? ' · '+fmt(o.precio_ha)+'/ha' : ''))+nota+'</p>';
+          : (trSupTxt(o) ? ' · '+trSupTxt(o) : '')+(o.precio_ha ? ' · '+esc(trPrecio(o)) : ''))+nota+'</p>';
     }
     return '<p class="stat-sub" style="margin:3px 0;">'+chip+'<strong>'+esc(o.folio||'')+'</strong> · '+esc(o.nombre||'')+(o.empresa?' ('+esc(o.empresa)+')':'')+' · '+esc(rqTipoTxt(o))+' · '+esc(rqSupTxt(o))+nota+'</p>';
   }).join('');
@@ -4004,7 +4037,7 @@ async function descargarKMZ(id){
 
 async function agregarTerrenoAPipeline(id){
   const t = terrenos.find(x=>x.id===id);
-  const sup = t.superficie_ha ? Number(t.superficie_ha).toLocaleString('es-MX')+' ha' : 'superficie no indicada';
+  const sup = trSupTxt(t) || 'superficie no indicada';
   const partes = [
     'Registro '+(t.folio||''),
     trOfertaTipo(t)+' en '+t.municipio+', '+t.estado+' · '+sup,
