@@ -367,7 +367,7 @@
         <div><label>Estado</label><select id="mr-estado"></select></div>
         <div><label>Municipio</label><input id="mr-mun"></div>
         <div><label>Superficie en</label><select id="mr-supunidad" onchange="mrUnidadSup()"><option value="ha">Hectáreas (ha)</option><option value="m2">Metros cuadrados (m²)</option></select></div>
-        <div><label id="mr-sup-l">Superficie (ha)</label><input id="mr-sup" type="number" min="0" step="any"></div>
+        <div><label id="mr-sup-l">Superficie (ha)</label><input id="mr-sup" type="number" min="0" step="any" oninput="mrEquivalencia()"><p class="stat-sub" id="mr-sup-eq" style="margin:4px 0 0;color:var(--brass);"></p></div>
         <div id="mr-cult-box"><label>Qué se siembra hoy</label><input id="mr-cult"></div>
         <div><label>Agua</label><select id="mr-agua"><option value="">Sin dato</option></select></div>
         <div><label>Agua · si es «Otro», ¿cuál?</label><input id="mr-agua-otro" type="text" maxlength="120"></div>
@@ -1282,6 +1282,19 @@ function trPrecioVal(t){
   if(!t.precio_ha) return null;
   return trM2(t) ? Math.round(Number(t.precio_ha)/10000/(t.disponibilidad==='renta' ? 12 : 1)*100)/100 : Number(t.precio_ha);
 }
+// Superficie o precio que parecen de la otra unidad (m² escritos como hectáreas, precio por m² como por hectárea)
+function trSupDudosa(t){
+  if(esBodega(t) || !t.superficie_ha) return '';
+  const ha = Number(t.superficie_ha), m2 = trM2(t), r = [];
+  if(!m2 && ha >= 1000) r.push('superficie de '+ha.toLocaleString('es-MX')+' ha: ¿eran m²?');
+  if(m2 && ha*10000 < 100) r.push('superficie de '+Math.round(ha*10000)+' m²: ¿eran hectáreas?');
+  if(t.precio_ha && ['venta','ambas'].includes(t.disponibilidad)){
+    const pv = trPrecioVal(t);
+    if(!m2 && pv < 1000) r.push('precio de '+fmt(pv)+' por ha: ¿era por m²?');
+    if(m2 && pv >= 100000) r.push('precio de '+fmt(pv)+' por m²: ¿era por ha?');
+  }
+  return r.join(' · ');
+}
 function trPrecioUnidad(t){
   if(trM2(t)) return t.disponibilidad==='renta' ? ' MXN por m² al mes' : ' MXN por m²';
   return t.disponibilidad==='renta' ? ' MXN por ha al año' : ' MXN por ha';
@@ -1374,6 +1387,7 @@ function renderPorEnviarHoy(){
     return '<div class="aviso-item" style="padding:8px 0;">'+
       '<p class="stat-sub" style="margin:0;"><strong>'+esc(t.folio||'')+'</strong> · '+esc(t.nombre||'Sin nombre')+' · '+esc(trLabel('rol',t.rol))+' · '+esc([trPredio(t), t.estado].filter(Boolean).join(', '))+
         (ret ? ' · <span style="color:var(--brass)">retomar</span>' : '')+
+        (trSupDudosa(t) ? ' · <span style="color:var(--rust)">revisar superficie o precio antes de escribirle</span>' : '')+
         (falta ? ' · <span style="color:var(--rust)">pide el KMZ</span>' : (ret ? '' : t.dist_carretera_km==null && t.dist_ciudad_km==null ? ' · <span style="color:var(--rust)">sin datos de ubicación: calcúlalos antes</span>' : ''))+'</p>'+
       '<div class="tr-acciones" style="margin-top:4px;">'+
         (dig.length===10 ? '<a class="edit-link tr-copiar" href="https://wa.me/52'+dig+'?text='+encodeURIComponent(msj)+'" target="_blank" rel="noopener">abrir WhatsApp</a>' : '<span class="stat-sub">sin WhatsApp válido</span>')+
@@ -1450,6 +1464,7 @@ function renderTerrenos(){
       '<p style="margin:6px 0 2px;"><strong>'+esc(t.nombre)+'</strong> — '+esc(trLabel('rol',t.rol))+(waLink?' · '+waLink:'')+'</p>'+
       '<p class="stat-sub" style="margin:2px 0;color:var(--ink);">'+esc(trOfertaTipo(t))+'</p>'+
       '<p class="stat-sub" style="margin:2px 0;">'+base+'</p>'+
+      (trSupDudosa(t) ? '<p class="stat-sub" style="margin:2px 0;color:var(--rust);">Revisar: '+esc(trSupDudosa(t))+' Corrígelo en «editar datos» (unidad ha | m²).</p>' : '')+
       (precioTxt ? '<p class="stat-sub" style="margin:2px 0;color:var(--brass);">'+precioTxt+'</p>' : '')+
       '<p class="stat-sub" style="margin:2px 0;">'+(t.esquema ? 'Condiciones: '+esc(trCondiciones(t)) : '<span style="color:var(--rust)">Condiciones con Urbakasa pendientes'+esc(trPendienteMotivo(t))+'</span>')+
         ' · '+(t.autoriza_presentacion ? 'autorizó presentarlo' : '<span style="color:var(--rust)">sin autorización de presentación</span>')+'</p>'+
@@ -1841,7 +1856,23 @@ const MR_SUBS = {
 };
 const MR_ESTADOS = ['Aguascalientes','Baja California','Baja California Sur','Campeche','Chiapas','Chihuahua','Ciudad de México','Coahuila','Colima','Durango','Estado de México','Guanajuato','Guerrero','Hidalgo','Jalisco','Michoacán','Morelos','Nayarit','Nuevo León','Oaxaca','Puebla','Querétaro','Quintana Roo','San Luis Potosí','Sinaloa','Sonora','Tabasco','Tamaulipas','Tlaxcala','Veracruz','Yucatán','Zacatecas'];
 let mrListo = false;
+function mrEquivalencia(){
+  const n = parseFloat(document.getElementById('mr-sup').value), m2 = document.getElementById('mr-supunidad').value==='m2', eq = document.getElementById('mr-sup-eq');
+  eq.textContent = isNaN(n) || n<=0 ? '' : (m2 ? '= '+(n/10000).toLocaleString('es-MX',{maximumFractionDigits:4})+' ha' : '= '+Math.round(n*10000).toLocaleString('es-MX')+' m²');
+}
+// Antes de guardar: confirma superficie o precio que parecen de la otra unidad
+function mrConfirmaUnidades(){
+  const n = parseFloat(document.getElementById('mr-sup').value), m2 = document.getElementById('mr-supunidad').value==='m2';
+  const d = document.getElementById('mr-disp').value, p = parseInt(document.getElementById('mr-precio').value.replace(/\D/g,''),10);
+  const dudas = [];
+  if(!isNaN(n) && !m2 && n >= 1000) dudas.push('La superficie quedó en '+n.toLocaleString('es-MX')+' HECTÁREAS. Si son m², cambia «Superficie en» a m².');
+  if(!isNaN(n) && m2 && n < 100) dudas.push('La superficie quedó en '+n+' m². Si son hectáreas, cambia «Superficie en» a hectáreas.');
+  if(p > 0 && ['venta','ambas'].includes(d) && !m2 && p < 1000) dudas.push('El precio quedó en $'+p.toLocaleString('es-MX')+' por HECTÁREA. Si es por m², cambia la unidad a m² o multiplica por 10,000.');
+  if(p > 0 && ['venta','ambas'].includes(d) && m2 && p >= 100000) dudas.push('El precio quedó en $'+p.toLocaleString('es-MX')+' por m². Si es por hectárea, cambia la unidad a hectáreas.');
+  return !dudas.length || confirm(dudas.join('\n\n')+'\n\n¿Guardar así?');
+}
 function mrUnidadSup(){
+  mrEquivalencia();
   const m2 = document.getElementById('mr-supunidad').value==='m2', renta = document.getElementById('mr-disp').value==='renta';
   document.getElementById('mr-sup-l').textContent = m2 ? 'Superficie (m²)' : 'Superficie (ha)';
   document.getElementById('mr-precio-l').textContent = m2 ? (renta ? 'Renta por m² al mes (MXN)' : 'Precio por m² (MXN)') : (renta ? 'Renta por ha al año (MXN)' : 'Precio por ha (MXN)');
@@ -1909,6 +1940,7 @@ async function guardarEdicion(){
   if(v('mr-mun').length<2) faltan.push('municipio');
   if(otroVisible && v('mr-otro').length<2) faltan.push('tipo de proyecto');
   if(faltan.length){ msg.style.color='var(--rust)'; msg.textContent = 'Falta: '+faltan.join(', ')+'.'; return; }
+  if(!mrConfirmaUnidades()) return;
   const precio = parseInt(v('mr-precio').replace(/\D/g,''),10);
   const cambios = {
     nombre: v('mr-nombre'), whatsapp: wa, rol: v('mr-rol'), oferta: v('mr-oferta'), tipo: tp,
@@ -2391,6 +2423,7 @@ async function guardarRegistroManual(){
   if(otroVisible && v('mr-otro').length<2) faltan.push('tipo de proyecto');
   if(mrArchivos.some(a=>a.file.size > 10*1024*1024)) faltan.push('quitar los archivos de más de 10 MB');
   if(faltan.length){ msg.style.color='var(--rust)'; msg.textContent = 'Falta: '+faltan.join(', ')+'.'; return; }
+  if(!mrConfirmaUnidades()) return;
 
   btn.disabled = true; btn.textContent = 'Registrando…'; msg.textContent = '';
   const id = crypto.randomUUID();
@@ -3425,6 +3458,12 @@ async function rqGuardar(){
   if(!d.correo && !d.whatsapp && !d.linkedin_url){ msg.style.color='var(--rust)'; msg.textContent = 'Escribe al menos un correo, un WhatsApp o el enlace de LinkedIn.'; return; }
   if(d.linkedin_url && !/linkedin\.com\//i.test(d.linkedin_url)){ msg.style.color='var(--rust)'; msg.textContent = 'El enlace de LinkedIn no parece de linkedin.com.'; return; }
   if(d.sup_desde_ha && d.sup_hasta_ha && d.sup_hasta_ha <= d.sup_desde_ha){ msg.style.color='var(--rust)'; msg.textContent = '«Hasta» debe ser mayor que «Desde».'; return; }
+  if(d.busca!=='bodega' && d.sup_desde_ha){
+    const dudas = [];
+    if(d.sup_unidad!=='m2' && d.sup_desde_ha >= 1000) dudas.push('La superficie quedó desde '+Number(d.sup_desde_ha).toLocaleString('es-MX')+' HECTÁREAS. Si son m², cambia «Superficie en» a m².');
+    if(d.sup_unidad==='m2' && d.sup_desde_ha*10000 < 100) dudas.push('La superficie quedó desde '+Math.round(d.sup_desde_ha*10000)+' m². Si son hectáreas, cambia «Superficie en» a hectáreas.');
+    if(dudas.length && !confirm(dudas.join('\n\n')+'\n\n¿Guardar así?')) return;
+  }
   btn.disabled = true; btn.textContent = 'Guardando…';
   try{
     if(rqEditId){
