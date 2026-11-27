@@ -3458,6 +3458,12 @@ async function rqGuardar(){
   if(!d.correo && !d.whatsapp && !d.linkedin_url){ msg.style.color='var(--rust)'; msg.textContent = 'Escribe al menos un correo, un WhatsApp o el enlace de LinkedIn.'; return; }
   if(d.linkedin_url && !/linkedin\.com\//i.test(d.linkedin_url)){ msg.style.color='var(--rust)'; msg.textContent = 'El enlace de LinkedIn no parece de linkedin.com.'; return; }
   if(d.sup_desde_ha && d.sup_hasta_ha && d.sup_hasta_ha <= d.sup_desde_ha){ msg.style.color='var(--rust)'; msg.textContent = '«Hasta» debe ser mayor que «Desde».'; return; }
+  if(d.busca!=='bodega' && d.sup_desde_ha){
+    const dudas = [];
+    if(d.sup_unidad!=='m2' && d.sup_desde_ha >= 1000) dudas.push('La superficie quedó desde '+Number(d.sup_desde_ha).toLocaleString('es-MX')+' HECTÁREAS. Si son m², cambia «Superficie en» a m².');
+    if(d.sup_unidad==='m2' && d.sup_desde_ha*10000 < 100) dudas.push('La superficie quedó desde '+Math.round(d.sup_desde_ha*10000)+' m². Si son hectáreas, cambia «Superficie en» a hectáreas.');
+    if(dudas.length && !confirm(dudas.join('\n\n')+'\n\n¿Guardar así?')) return;
+  }
   btn.disabled = true; btn.textContent = 'Guardando…';
   try{
     if(rqEditId){
