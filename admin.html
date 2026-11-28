@@ -665,6 +665,7 @@ async function loadAll(){
   perfiles = pf.data || [];
   avisos = av.data || [];
   leadsWeb = lw.data || [];
+  setTimeout(aptoVigilar, 0);
 }
 
 function todayISO(){ return new Date().toISOString().slice(0,10); }
@@ -1469,7 +1470,7 @@ function renderTerrenos(){
       '<p class="stat-sub" style="margin:2px 0;">'+(t.esquema ? 'Condiciones: '+esc(trCondiciones(t)) : '<span style="color:var(--rust)">Condiciones con Urbakasa pendientes'+esc(trPendienteMotivo(t))+'</span>')+
         ' · '+(t.autoriza_presentacion ? 'autorizó presentarlo' : '<span style="color:var(--rust)">sin autorización de presentación</span>')+'</p>'+
       (detalle ? '<p class="stat-sub" style="margin:2px 0;">'+detalle+'</p>' : '')+
-      embEstadoHTML(t)+vocTarjetaHTML(t)+ubTarjetaHTML(t)+
+      embEstadoHTML(t)+aptoTarjetaHTML(t)+vocTarjetaHTML(t)+ubTarjetaHTML(t)+
       (function(){ const rc = requerimientosQueCumple(t); return '<details class="conv"><summary>requerimientos que cumple ('+rc.length+')</summary>'+cruceHTML(rc,'requerimientos')+'</details>'; })()+
       pqResumenRegistro('terreno', t.id)+
       ((Array.isArray(t.archivos) && t.archivos.length) ? '<p class="stat-sub" style="margin:4px 0 0;">Archivos: '+t.archivos.map((a,i)=>'<button class="edit-link" style="display:inline;padding:0;" onclick="bajarAdjunto(\''+t.id+'\','+i+')">'+esc(a.nombre)+'</button>').join(' · ')+'</p>' : '')+
@@ -1481,6 +1482,7 @@ function renderTerrenos(){
         '<button class="edit-link" id="tr-emb-'+t.id+'" onclick="copiarFicha(\''+t.id+'\', \'emb\')">mensaje de la embajadora</button>'+
         '<button class="edit-link" id="tr-ficha-'+t.id+'" onclick="copiarFicha(\''+t.id+'\', true)">solo ficha</button>'+
         (trArchivoTipo(t)==='kmz' ? '<button class="edit-link tr-copiar" onclick="verMapa(\''+t.id+'\')">ver en mapa</button>' : '')+
+        (aptoElegible(t) && !t.apto_estado ? '<button class="edit-link tr-copiar" id="tr-apto-'+t.id+'" onclick="aptoGenerar(\''+t.id+'\')">generar Terreno apto</button>' : '')+
         (trArchivoTipo(t)==='cuadro' ? '<button class="edit-link tr-copiar" onclick="verCuadro(\''+t.id+'\')">ver cuadro</button>' : '')+kmz+
         ((trArchivoTipo(t)==='kmz' || t.maps_url) ? '<button class="edit-link tr-copiar" id="tr-voc-'+t.id+'" onclick="calcularUbicacionTerreno(\''+t.id+'\')">'+(t.ubicacion_calculada_at || t.datos_vocacion ? 'recalcular ubicación' : 'calcular ubicación')+'</button>' : '')+
         (t.kmz_path && t.maps_url ? mapsLink : '')+
@@ -4059,6 +4061,109 @@ document.getElementById('tr-kmz-input').addEventListener('change', async functio
   renderAll();
   if(!upd.error && tipoArch==='kmz'){ await calcularUbicacionTerreno(id, true); renderTerrenos(); }
 });
+
+// ═════════════ Terreno apto para Dictamen (v2.15) ═════════════
+// El botón pide el documento a Supabase (solicitar_apto), que avisa al generador privado en GitHub
+// (urbakasa/apto-dictamen). El generador corre el skill tal cual y deja el PDF y la nota interna en la
+// carpeta privada «apto-dictamen». Solo para terrenos con KMZ; nunca bodegas, proyectos ni solo Google Maps.
+const APTO_MSG_ESPERA = 15; // minutos sin respuesta para ofrecer reintentar
+function aptoElegible(t){
+  return !esBodega(t) && !esProyecto(t) && trArchivoTipo(t)==='kmz' && /\.(kmz|kml)$/i.test(t.kmz_path||'');
+}
+function aptoFechaCorta(f){ if(!f) return ''; const d = new Date(f+'T12:00:00'); return d.toLocaleDateString('es-MX',{day:'numeric',month:'short',year:'numeric'}); }
+function aptoVencido(t){ return t.apto_vence && new Date(t.apto_vence+'T23:59:59') < new Date(); }
+function aptoTarjetaHTML(t){
+  if(!t.apto_estado) return '';
+  const b = (txt, fn, extra) => '<button class="edit-link" style="display:inline;padding:0 0 0 10px;" onclick="'+fn+'(\''+t.id+'\')"'+(extra||'')+'>'+txt+'</button>';
+  const est = t.apto_estado;
+  if(est==='solicitado' || est==='procesando'){
+    const min = t.apto_solicitado_at ? (Date.now() - new Date(t.apto_solicitado_at).getTime())/60000 : 0;
+    if(min > APTO_MSG_ESPERA) return '<p class="stat-sub" style="margin:4px 0;color:var(--rust);">Terreno apto: el generador no respondió.'+b('intentar de nuevo','aptoGenerar')+'</p>';
+    return '<p class="stat-sub" style="margin:4px 0;color:var(--brass);">Terreno apto: '+(est==='solicitado' ? 'solicitado' : 'generando')+'… suele tardar de 2 a 5 minutos; esta tarjeta se actualiza sola.</p>';
+  }
+  if(est==='error') return '<p class="stat-sub" style="margin:4px 0;color:var(--rust);">Terreno apto: no se pudo generar. '+esc(t.apto_error||'')+b('intentar de nuevo','aptoGenerar')+'</p>';
+  const avisos = Array.isArray(t.apto_avisos) ? t.apto_avisos : [];
+  const listaAvisos = avisos.length ? '<br>Avisos: '+avisos.map(esc).join(' · ') : '';
+  const fechas = 'emitido el '+esc(aptoFechaCorta(t.apto_emitido))+' · '+(aptoVencido(t) ? '<span style="color:var(--rust)">venció el '+esc(aptoFechaCorta(t.apto_vence))+'</span>' : 'válido hasta el '+esc(aptoFechaCorta(t.apto_vence)));
+  if(est==='revisar') return '<p class="stat-sub" style="margin:4px 0;color:var(--rust);">Terreno apto: revisa estos avisos antes de enviarlo ('+fechas+').'+listaAvisos+'<br>'+
+      b('ver PDF','aptoPDF')+b('ver nota interna','aptoNota')+b('está bien, liberar','aptoLiberar')+b('generar de nuevo','aptoGenerar')+'</p>';
+  return '<p class="stat-sub" style="margin:4px 0;color:var(--moss);">Terreno apto para Dictamen: '+fechas+(t.apto_nombre ? ' · «'+esc(t.apto_nombre)+'»' : '')+'.'+
+      (avisos.length ? '<span style="color:var(--ink)">'+listaAvisos+'</span>' : '')+'<br>'+
+      b('descargar PDF','aptoPDF')+b('copiar mensaje de envío','aptoMensaje',' id="tr-aptomsg-'+t.id+'"')+b('ver nota interna','aptoNota')+b(aptoVencido(t) ? 'renovar (nueva fecha)' : 'generar de nuevo','aptoGenerar')+'</p>';
+}
+async function aptoNombreSugerido(t){
+  // Nombre del polígono dentro del KMZ, si trae uno útil
+  try{
+    const { data } = await client.storage.from('kmz-terrenos').createSignedUrl(t.kmz_path, 120);
+    if(!data) return '';
+    const blob = await (await fetch(data.signedUrl)).blob();
+    const kml = await kmlTexto(new File([blob], 'terreno.'+extDe(t.kmz_path)));
+    const nombres = [...String(kml||'').matchAll(/<Placemark[^>]*>[\s\S]*?<name>([\s\S]*?)<\/name>/g)].map(m=>m[1].replace(/<!\[CDATA\[|\]\]>/g,'').trim()).filter(Boolean);
+    const n = nombres.find(x=>!/^(sin t[ií]tulo|untitled|pol[ií]gono|polygon|terreno|kmz)\s*\d*$/i.test(x)) || '';
+    return n.replace(/^\s*(el\s+)?predio\s+/i,'').slice(0,120);
+  }catch(e){ return ''; }
+}
+async function aptoGenerar(id){
+  const t = terrenos.find(x=>x.id===id);
+  if(!t || !aptoElegible(t)){ alert('Este terreno no tiene KMZ: el documento necesita el polígono.'); return; }
+  const btn = document.getElementById('tr-apto-'+id); if(btn){ btn.disabled = true; btn.textContent = 'preparando…'; }
+  const sugerido = t.apto_nombre || await aptoNombreSugerido(t);
+  if(btn){ btn.disabled = false; btn.textContent = 'generar Terreno apto'; }
+  const nombre = prompt('Nombre del predio para el documento.\nAparece así: «Revisamos el predio ___, de '+(t.superficie_ha ? trSupTxt(t) : 'X ha')+' en '+(t.municipio||'…')+'…»\n\nEjemplos: El Mezquite · Rancho San José · Parcela 12', sugerido || '');
+  if(nombre===null) return;
+  const limpio = nombre.trim().replace(/^\s*(el\s+)?predio\s+/i,'');
+  if(limpio.length < 2){ alert('Escribe el nombre del predio.'); return; }
+  const { data, error } = await client.rpc('solicitar_apto', { p_id: id, p_nombre: limpio });
+  if(error){ alert('No se pudo solicitar el documento: '+error.message); return; }
+  t.apto_nombre = limpio;
+  if(data==='en_proceso'){ alert('Este documento ya se está generando.'); }
+  else { t.apto_estado = 'solicitado'; t.apto_solicitado_at = new Date().toISOString(); t.apto_error = null; }
+  renderTerrenos(); aptoVigilar();
+}
+let aptoTimer = null;
+function aptoVigilar(){
+  const pendientes = terrenos.filter(t=>t.apto_estado==='solicitado' || t.apto_estado==='procesando');
+  if(!pendientes.length || aptoTimer) return;
+  aptoTimer = setTimeout(async ()=>{
+    aptoTimer = null;
+    const ids = terrenos.filter(t=>t.apto_estado==='solicitado' || t.apto_estado==='procesando').map(t=>t.id);
+    if(!ids.length) return;
+    const { data } = await client.from('terrenos_captados')
+      .select('id,apto_estado,apto_nombre,apto_solicitado_at,apto_emitido,apto_vence,apto_pdf,apto_nota,apto_avisos,apto_error').in('id', ids);
+    let cambio = false;
+    (data||[]).forEach(r=>{ const t = terrenos.find(x=>x.id===r.id); if(t && (t.apto_estado!==r.apto_estado || t.apto_pdf!==r.apto_pdf)){ Object.assign(t, r); cambio = true; } });
+    if(cambio) renderTerrenos();
+    aptoVigilar();
+  }, 15000);
+}
+async function aptoBajar(path, nombre, abrir){
+  const { data, error } = await client.storage.from('apto-dictamen').download(path);
+  if(error || !data){ alert('No se pudo abrir el archivo: '+(error ? error.message : 'sin respuesta')); return; }
+  const url = URL.createObjectURL(abrir ? new Blob([await data.text()], {type:'text/plain;charset=utf-8'}) : data);
+  const a = document.createElement('a'); a.href = url;
+  if(abrir){ a.target = '_blank'; a.rel = 'noopener'; } else a.download = nombre;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url), 60000);
+}
+function aptoPDF(id){ const t = terrenos.find(x=>x.id===id); if(t && t.apto_pdf) aptoBajar(t.apto_pdf, t.apto_pdf.split('/').pop(), false); }
+function aptoNota(id){ const t = terrenos.find(x=>x.id===id); if(t && t.apto_nota) aptoBajar(t.apto_nota, t.apto_nota.split('/').pop(), true); }
+async function aptoLiberar(id){
+  if(!confirm('¿Revisaste los avisos y el documento se puede enviar así?')) return;
+  const { error } = await client.rpc('liberar_apto', { p_id: id });
+  if(error){ alert('No se pudo liberar: '+error.message); return; }
+  const t = terrenos.find(x=>x.id===id); if(t) t.apto_estado = 'emitido';
+  renderTerrenos();
+}
+// Mensaje base aprobado (18 nov 2026); al asesor o corredor, «el terreno de tu cliente»
+function aptoMensaje(id){
+  const t = terrenos.find(x=>x.id===id); if(!t) return;
+  const n = t.apto_nombre || t.municipio || '';
+  const terreno = (t.rol==='asesor' || t.rol==='corredor') ? 'el terreno de tu cliente, '+n+',' : 'el terreno '+n;
+  const msg = 'Revisamos '+terreno+' y ya está en nuestra cartera para presentarlo a nuestros clientes. Te compartimos un documento con lo que encontramos y con una opción para potenciar su venta. ¿Lo platicamos esta semana?';
+  copiarTexto(msg).then(()=>{
+    const b = document.getElementById('tr-aptomsg-'+id); if(b){ b.textContent = 'copiado ✓'; setTimeout(()=>b.textContent='copiar mensaje de envío', 1500); }
+  });
+}
 
 async function descargarKMZ(id){
   const t = terrenos.find(x=>x.id===id);
